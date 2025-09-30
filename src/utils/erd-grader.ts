@@ -412,121 +412,81 @@ function parseEntityAttributes(
     allCells: { [id: string]: Element },
     parentMap: { [id: string]: string }
 ): void {
-    console.log(`DEBUG: parseEntityAttributes for entity: ${entityData.name} (ID: ${entityId})`);
     const entityGtName = entityData.ground_truth_name;
     const expectedPks = EXPECTED_STRUCTURE[entityGtName]?.pk || [];
     const expectedFks = EXPECTED_STRUCTURE[entityGtName]?.fk || [];
 
-    const entityCells: { id: string; value: string; y: number; x: number; width: number; style: string }[] = [];
+    const attributeCandidates: { id: string; value: string; y: number; x: number; style: string }[] = [];
     for (const cellId in allCells) {
-        let currentId: string | undefined = cellId;
-        let found = false;
+        const cell = allCells[cellId];
+        const parentOfCell = parentMap[cellId];
+
+        // Check if the cell is a direct child of the entity or a child of a tableRow within the entity
+        let isChildOfEntity = false;
+        let currentParentId: string | undefined = parentOfCell;
         let depth = 0;
-        while (currentId && depth < 10) { // Limit depth to prevent infinite loops
-            if (currentId === entityId) {
-                found = true;
+        while (currentParentId && depth < 5) { // Limit depth to avoid infinite loops
+            if (currentParentId === entityId) {
+                isChildOfEntity = true;
                 break;
             }
-            currentId = parentMap[currentId];
+            currentParentId = parentMap[currentParentId];
             depth++;
         }
 
-        if (found && cellId !== entityId) { // Only consider children, not the entity itself
-            const cell = allCells[cellId];
+        if (isChildOfEntity && cellId !== entityId) {
             const value = cell.getAttribute('value')?.trim() || '';
+            const style = cell.getAttribute('style') || '';
             const geometry = cell.querySelector('mxGeometry');
             const yPos = parseFloat(geometry?.getAttribute('y') || '0');
             const xPos = parseFloat(geometry?.getAttribute('x') || '0');
-            const width = parseFloat(geometry?.getAttribute('width') || '0');
-            const style = cell.getAttribute('style') || '';
 
-            // Skip cells that are clearly not attributes (e.g., table headers, empty, or the entity name itself if it somehow got here)
-            // Also skip cells that are just structural table rows if they don't contain meaningful data
-            if (style.includes('tableRow') || !value || isSimilarName(value)) {
-                console.log(`DEBUG: Skipping cell ${cellId} (value: '${value}', style: '${style.substring(0, 50)}...') - reason: tableRow, empty value, or similar to entity name.`);
+            // Skip cells that are purely structural table rows or empty
+            if (style.includes('tableRow') || !value) {
                 continue;
             }
 
-            entityCells.push({
+            attributeCandidates.push({
                 id: cellId,
                 value: value,
                 y: yPos,
                 x: xPos,
-                width: width,
                 style: style
             });
-            console.log(`DEBUG: Added potential attribute cell: ID: ${cellId}, Value: '${value}', Y: ${yPos}, X: ${xPos}`);
         }
     }
 
-    // Sort cells by Y-coordinate, then X-coordinate to group them into logical rows
-    entityCells.sort((a, b) => {
+    // Sort cells primarily by Y-coordinate, then by X-coordinate
+    attributeCandidates.sort((a, b) => {
         if (a.y !== b.y) return a.y - b.y;
         return a.x - b.x;
     });
-    console.log(`DEBUG: Sorted entityCells for ${entityData.name}:`, entityCells.map(c => ({id: c.id, value: c.value, y: c.y, x: c.x})));
 
+    let currentIsPk = false;
+    let currentIsFk = false;
 
-    const rows: typeof entityCells[][] = [];
-    let currentRow: typeof entityCells = [];
-    let lastY: number | null = null;
-    const tolerance = 5; // Tolerance for grouping cells into the same row
+    for (let i = 0; i < attributeCandidates.length; i++) {
+        const cellInfo = attributeCandidates[i];
+        const cleanedValue = stripHtmlTags(cellInfo.value);
+        const upperCleanedValue = cleanedValue.toUpperCase();
 
-    for (const cellInfo of entityCells) {
-        if (lastY === null || Math.abs(cellInfo.y - lastY) <= tolerance) {
-            currentRow.push(cellInfo);
-            lastY = cellInfo.y;
-        } else {
-            if (currentRow.length > 0) {
-                rows.push(currentRow);
-            }
-            currentRow = [cellInfo];
-            lastY = cellInfo.y;
-        }
-    }
-    if (currentRow.length > 0) {
-        rows.push(currentRow);
-    }
-    console.log(`DEBUG: Grouped rows for ${entityData.name}:`, rows.map((row, i) => `Row ${i}: [${row.map(c => c.value).join(', ')}]`));
-
-
-    for (const row of rows) {
-        if (row.length < 1) continue;
-
-        row.sort((a, b) => a.x - b.x); // Ensure cells within a row are sorted by X
-
-        let attrName: string | null = null;
-        for (const cellInfo of row) {
-            const value = cellInfo.value;
-            const cleanedValue = stripHtmlTags(value);
-            if (cleanedValue && !NON_ATTRIBUTE_VALUES.has(cleanedValue.toUpperCase()) && !isSimilarName(cleanedValue)) {
-                attrName = cleanedValue; // Use cleaned value as attribute name
-                console.log(`DEBUG: Found potential attrName '${attrName}' in row: [${row.map(c => c.value).join(', ')}]`);
-                break; 
-            } else {
-                console.log(`DEBUG: Skipping cell in row for attrName: '${value}' (cleaned: '${cleanedValue}', isNonAttr: ${NON_ATTRIBUTE_VALUES.has(cleanedValue.toUpperCase())}, isSimilarName: ${isSimilarName(cleanedValue)})`);
-            }
+        // Check if it's a key indicator
+        if (upperCleanedValue.includes('PK') || upperCleanedValue.includes('FK')) {
+            currentIsPk = upperCleanedValue.includes('PK');
+            currentIsFk = upperCleanedValue.includes('FK');
+            // The indicator applies to the *next* attribute found, so don't add this cell as an attribute itself.
+            continue;
         }
 
-        if (attrName) {
-            let isPk = false;
-            let isFk = false;
+        // If it's not an indicator and not an entity name, it's likely an an attribute
+        if (!NON_ATTRIBUTE_VALUES.has(upperCleanedValue) && !isSimilarName(cleanedValue)) {
+            let isPk = currentIsPk;
+            let isFk = currentIsFk;
 
-            const indicatorCell = row.find(cell => 
-                cell.width > 0 && cell.width < 80 && 
-                (stripHtmlTags(cell.value).toUpperCase().includes('PK') || stripHtmlTags(cell.value).toUpperCase().includes('FK') || stripHtmlTags(cell.value).toUpperCase() === '')
-            );
-            
-            if (indicatorCell) {
-                const indicatorValue = stripHtmlTags(indicatorCell.value).toUpperCase();
-                isPk = indicatorValue.includes('PK');
-                isFk = indicatorValue.includes('FK');
-                console.log(`DEBUG: Indicator found for '${attrName}': '${indicatorValue}' -> PK: ${isPk}, FK: ${isFk}`);
-            } else {
-                // If no explicit indicator, infer from expected keys
-                isPk = fuzzyMatchAttribute(attrName, expectedPks) !== null;
-                isFk = fuzzyMatchAttribute(attrName, expectedFks) !== null;
-                console.log(`DEBUG: No explicit indicator for '${attrName}'. Inferring -> PK: ${isPk}, FK: ${isFk}`);
+            // If no explicit indicator was set, try to infer from expected keys
+            if (!isPk && !isFk) {
+                isPk = fuzzyMatchAttribute(cleanedValue, expectedPks) !== null;
+                isFk = fuzzyMatchAttribute(cleanedValue, expectedFks) !== null;
             }
 
             let typeStr = '';
@@ -539,14 +499,15 @@ function parseEntityAttributes(
             }
 
             entityData.attributes.push({
-                name: attrName,
+                name: cleanedValue,
                 type: typeStr,
                 is_pk: isPk,
                 is_fk: isFk
             });
-            console.log(`DEBUG: Pushed attribute: ${attrName} (Type: ${typeStr}) to ${entityData.name}`);
-        } else {
-            console.log(`DEBUG: No attribute name found for row: [${row.map(c => c.value).join(', ')}]`);
+
+            // Reset key flags after an attribute has been processed
+            currentIsPk = false;
+            currentIsFk = false;
         }
     }
 }
@@ -608,7 +569,7 @@ function identifyRelationships(
                 name: relName,
                 cardinality: cardinality,
                 start_card: startCard,
-                end_card: endCard // Corrected from end_card to endCard
+                end_card: endCard
             });
             console.log(`DEBUG: Identified relationship: ${entities[sourceEntityId].name} -> ${entities[targetEntityId].name} (Card: ${cardinality})`);
         }
