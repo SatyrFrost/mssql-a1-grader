@@ -505,7 +505,19 @@ interface GradingFeedback {
     }[];
 }
 
-function calculateScore(entities: { [id: string]: ParsedEntity }, relationships: ParsedRelationship[]) {
+interface ScoreDetails {
+    rawScore: number;
+    scaledScore: number;
+    percentage: number;
+    MAX_RAW_SCORE: number;
+    feedbackPoints: GradingFeedback;
+    missingEntities: string[];
+    fieldMarks: number;
+    keyMarks: number;
+    relationshipMarks: number;
+}
+
+function calculateScore(entities: { [id: string]: ParsedEntity }, relationships: ParsedRelationship[]): ScoreDetails {
     const MAX_RAW_SCORE = 116;
     let currentScore = 0;
     const feedbackPoints: GradingFeedback = {
@@ -626,7 +638,7 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
     const scaledScore = (currentScore / MAX_RAW_SCORE) * 40;
     const percentage = (currentScore / MAX_RAW_SCORE) * 100;
 
-    return { rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities: Array.from(missingEntities) };
+    return { rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities: Array.from(missingEntities), fieldMarks, keyMarks, relationshipMarks };
 }
 
 function generateReport(
@@ -637,7 +649,10 @@ function generateReport(
     percentage: number,
     maxRawScore: number,
     feedback: GradingFeedback,
-    missingEntities: string[]
+    missingEntities: string[],
+    fieldMarks: number,
+    keyMarks: number,
+    relationshipMarks: number
 ): string {
     let report = `--- GRADING REPORT (Part 1: ERD) --- 
 Raw Score: ${rawScore.toFixed(0)} / ${maxRawScore} 
@@ -677,6 +692,15 @@ Missing Tables: ${missingEntities.length > 0 ? missingEntities.sort().join(', ')
     }
 
     report += "\n---";
+
+    report += `\n\n## Excel-Friendly Summary\n\n`;
+    report += `55 fields: ${fieldMarks}\n`;
+    report += `40 relationship parts: ${relationshipMarks}\n`;
+    report += `21 keys: ${keyMarks}\n`;
+    report += `Total: ${rawScore}\n`;
+    report += `Scaled Score (out of 40): ${scaledScore.toFixed(2)}\n`;
+    report += `Percentage: ${percentage.toFixed(1)}%\n`;
+
     return report;
 }
 
@@ -704,8 +728,8 @@ export function gradeErd(xmlContent: string): { report: string; score: number } 
         }
         console.log("----------------------------------\n");
 
-        const { rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities } = calculateScore(entities, relationships);
-        const reportContent = generateReport(entities, relationships, rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities);
+        const { rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities, fieldMarks, keyMarks, relationshipMarks } = calculateScore(entities, relationships);
+        const reportContent = generateReport(entities, relationships, rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities, fieldMarks, keyMarks, relationshipMarks);
 
         console.log(reportContent);
         console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (${percentage.toFixed(1)}%)`);
