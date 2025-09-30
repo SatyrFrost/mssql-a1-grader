@@ -377,24 +377,15 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
         }
 
         for (const row of rows) {
-            if (row.length < 1) continue; // Changed from < 2, as a single cell can be an attribute
+            if (row.length < 1) continue;
 
             row.sort((a, b) => a.x - b.x);
 
-            let indicator: string | null = null;
             let attrName: string | null = null;
-            let hasIndicatorCell = false;
-
-            const firstCell = row[0];
-            if (firstCell.width > 0 && firstCell.width < 80) { // Heuristic for indicator cell
-                hasIndicatorCell = true;
-                if (["PK", "FK", "PK, FK"].includes(firstCell.value)) {
-                    indicator = firstCell.value;
-                }
-            }
-
+            // Find the actual attribute name cell (not the PK/FK indicator)
             for (const cellInfo of row) {
                 const value = cellInfo.value;
+                // Heuristic: attribute name is usually not "PK", "FK", "PK, FK" and not an entity name
                 if (value && !nonAttributeValues.has(value) && !isSimilarName(value)) {
                     attrName = value;
                     break;
@@ -405,11 +396,19 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                 let isPk = false;
                 let isFk = false;
 
-                if (hasIndicatorCell && indicator) {
-                    isPk = indicator.includes('PK');
-                    isFk = indicator.includes('FK');
+                // Check for an explicit indicator cell first (small width, specific values)
+                const indicatorCell = row.find(cell => 
+                    cell.width > 0 && cell.width < 80 && 
+                    ["PK", "FK", "PK, FK", ""].includes(cell.value.toUpperCase()) // Check for empty string too
+                );
+                
+                if (indicatorCell) {
+                    // If an indicator cell exists, its content is the source of truth
+                    const indicatorValue = indicatorCell.value.toUpperCase();
+                    isPk = indicatorValue.includes('PK');
+                    isFk = indicatorValue.includes('FK');
                 } else {
-                    // If no explicit indicator cell, try to infer from fuzzy matching
+                    // If no explicit indicator cell is found, then try fuzzy matching as a fallback
                     const matchedPk = fuzzyMatchAttribute(attrName, expectedPks);
                     const matchedFk = fuzzyMatchAttribute(attrName, expectedFks);
                     isPk = matchedPk !== null;
@@ -486,7 +485,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                 name: relName,
                 cardinality: cardinality,
                 start_card: startCard,
-                end_card: endCard
+                end_card: end_card
             });
         }
     });
