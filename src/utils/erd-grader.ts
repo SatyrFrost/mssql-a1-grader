@@ -78,6 +78,16 @@ function extractMxGraphModel(xmlContent: string): Element | null {
         const mxModelDirect = diagram.querySelector('mxGraphModel');
         if (mxModelDirect) {
             console.log("DEBUG: 'mxGraphModel' found directly within 'diagram'.");
+            console.log("DEBUG: mxGraphModel outerHTML (first 500 chars):", mxModelDirect.outerHTML.substring(0, 500));
+
+            const testCell = mxModelDirect.querySelector('mxCell[id="2"]');
+            if (testCell) {
+                const testValue = testCell.getAttribute('value');
+                console.log(`DEBUG: Test cell ID '2' value: '${testValue}'`);
+            } else {
+                console.log("DEBUG: Test cell ID '2' not found.");
+            }
+
             return mxModelDirect;
         } else {
             console.log("DEBUG: 'mxGraphModel' NOT found directly within 'diagram'. Checking for compressed data.");
@@ -295,11 +305,20 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
 
     const nonAttributeValues = new Set([...Array.from(EXPECTED_ENTITY_NAMES_GROUND_TRUTH), "PK", "FK", "PK, FK", "PK,FK1", "PK,FK2"]);
 
+    const rootElement = mxGraphModel.querySelector('root');
+    if (!rootElement) {
+        console.error("DEBUG: No 'root' element found within mxGraphModel. Cannot parse cells.");
+        return { entities: {}, relationships: [] };
+    }
+    console.log("DEBUG: 'root' element found.");
+
+
     let totalCellsFound = 0;
-    mxGraphModel.querySelectorAll('mxCell').forEach(cell => {
+    rootElement.querySelectorAll('mxCell').forEach(cell => {
         totalCellsFound++;
         const cellId = cell.getAttribute('id');
         if (!cellId) {
+            console.warn("DEBUG: mxCell found without an ID.");
             return;
         }
 
@@ -313,6 +332,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
         const style = cell.getAttribute('style') || '';
 
         if (style.toLowerCase().includes('swimlane')) {
+            console.log(`DEBUG: Processing potential swimlane cell ID: ${cellId}, value: '${value}', style: '${style}'`);
             const matchedExpectedName = isSimilarName(value);
             if (matchedExpectedName) {
                 entities[cellId] = {
@@ -329,8 +349,6 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
     });
     console.log(`DEBUG: Total mxCells processed: ${totalCellsFound}`);
     console.log(`DEBUG: Entities identified after Pass 1: ${Object.keys(entities).length}`);
-
-    const entityIds = new Set(Object.keys(entities));
 
     // Pass 2: Process attributes with fuzzy matching
     console.log("DEBUG: Starting Pass 2: Processing attributes.");
@@ -482,7 +500,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
     };
 
     let totalEdgesFound = 0;
-    mxGraphModel.querySelectorAll("mxCell[edge='1']").forEach(cell => {
+    rootElement.querySelectorAll("mxCell[edge='1']").forEach(cell => {
         totalEdgesFound++;
         const style = cell.getAttribute('style') || '';
         const sourceId = cell.getAttribute('source');
