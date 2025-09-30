@@ -697,9 +697,13 @@ Missing Tables: ${missingEntities.length > 0 ? missingEntities.sort().join(', ')
     report += `55 fields: ${fieldMarks} / 55\n`;
     report += `40 relationship parts: ${relationshipMarks} / 40\n`;
     report += `21 keys: ${keyMarks} / 21\n`;
-    report += `Total: ${rawScore}\n`;
+    report += `Total: ${maxRawScore}\n`; // Changed to show maxRawScore
     report += `Scaled Score (out of 40): ${scaledScore.toFixed(2)}\n`;
     report += `Percentage: ${percentage.toFixed(1)}%\n`;
+    report += `\n`; // Add an extra newline for separation
+    report += `55\n`;
+    report += `40\n`;
+    report += `21\n`;
 
     return report;
 }
