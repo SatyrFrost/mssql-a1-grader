@@ -399,7 +399,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                 // Check for an explicit indicator cell first (small width, specific values)
                 const indicatorCell = row.find(cell => 
                     cell.width > 0 && cell.width < 80 && 
-                    ["PK", "FK", "PK, FK", ""].includes(cell.value.toUpperCase()) // Check for empty string too
+                    (cell.value.toUpperCase().includes('PK') || cell.value.toUpperCase().includes('FK') || cell.value.toUpperCase() === '')
                 );
                 
                 if (indicatorCell) {
