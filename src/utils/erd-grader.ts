@@ -274,12 +274,15 @@ function isSimilarName(foundName: string): string | null {
 }
 
 function fuzzyMatchAttribute(foundAttr: string, expectedAttrs: string[]): string | null {
-    // Strip HTML tags before processing
     const cleanedFoundAttr = stripHtmlTags(foundAttr);
     const foundNormalized = normalizeName(cleanedFoundAttr);
 
+    console.log(`DEBUG: fuzzyMatchAttribute: foundAttr='${foundAttr}' (normalized='${foundNormalized}'), expectedAttrs=[${expectedAttrs.map(normalizeName).join(', ')}]`);
+
     for (const expected of expectedAttrs) {
-        if (foundNormalized === normalizeName(expected)) {
+        const expectedNormalized = normalizeName(expected);
+        if (foundNormalized === expectedNormalized) {
+            console.log(`DEBUG: fuzzyMatchAttribute: Exact normalized match found: '${expected}'`);
             return expected;
         }
     }
@@ -300,6 +303,7 @@ function fuzzyMatchAttribute(foundAttr: string, expectedAttrs: string[]): string
         const target = commonVariations[foundNormalized];
         for (const expected of expectedAttrs) {
             if (normalizeName(expected) === normalizeName(target)) {
+                console.log(`DEBUG: fuzzyMatchAttribute: Common variation match found: '${expected}'`);
                 return expected;
             }
         }
@@ -318,6 +322,7 @@ function fuzzyMatchAttribute(foundAttr: string, expectedAttrs: string[]): string
             bestMatch = expected;
         }
     }
+    console.log(`DEBUG: fuzzyMatchAttribute: No exact/common match, best fuzzy match: '${bestMatch}' (distance: ${bestDistance})`);
     return bestMatch;
 }
 
@@ -412,37 +417,38 @@ function parseEntityAttributes(
     allCells: { [id: string]: Element },
     parentMap: { [id: string]: string }
 ): void {
+    console.log(`DEBUG: parseEntityAttributes for entity: ${entityData.name} (ID: ${entityId})`);
     const entityGtName = entityData.ground_truth_name;
     const expectedPks = EXPECTED_STRUCTURE[entityGtName]?.pk || [];
     const expectedFks = EXPECTED_STRUCTURE[entityGtName]?.fk || [];
 
     const attributeCandidates: { id: string; value: string; y: number; x: number; style: string }[] = [];
     for (const cellId in allCells) {
-        const cell = allCells[cellId];
-        const parentOfCell = parentMap[cellId];
-
-        // Check if the cell is a direct child of the entity or a child of a tableRow within the entity
-        let isChildOfEntity = false;
-        let currentParentId: string | undefined = parentOfCell;
+        let currentId: string | undefined = cellId;
+        let found = false;
         let depth = 0;
-        while (currentParentId && depth < 5) { // Limit depth to avoid infinite loops
-            if (currentParentId === entityId) {
-                isChildOfEntity = true;
+        while (currentId && depth < 10) { // Limit depth to prevent infinite loops
+            if (currentId === entityId) {
+                found = true;
                 break;
             }
-            currentParentId = parentMap[currentParentId];
+            currentId = parentMap[currentId];
             depth++;
         }
 
-        if (isChildOfEntity && cellId !== entityId) {
+        if (found && cellId !== entityId) { // Only consider children, not the entity itself
+            const cell = allCells[cellId];
             const value = cell.getAttribute('value')?.trim() || '';
-            const style = cell.getAttribute('style') || '';
             const geometry = cell.querySelector('mxGeometry');
             const yPos = parseFloat(geometry?.getAttribute('y') || '0');
             const xPos = parseFloat(geometry?.getAttribute('x') || '0');
+            const width = parseFloat(geometry?.getAttribute('width') || '0');
+            const style = cell.getAttribute('style') || '';
 
-            // Skip cells that are purely structural table rows or empty
-            if (style.includes('tableRow') || !value) {
+            // Skip cells that are clearly not attributes (e.g., table headers, empty, or the entity name itself if it somehow got here)
+            // Also skip cells that are just structural table rows if they don't contain meaningful data
+            if (style.includes('tableRow') || !value || isSimilarName(value)) {
+                console.log(`DEBUG: Skipping cell ${cellId} (value: '${value}', style: '${style.substring(0, 50)}...') - reason: tableRow, empty value, or similar to entity name.`);
                 continue;
             }
 
@@ -451,42 +457,81 @@ function parseEntityAttributes(
                 value: value,
                 y: yPos,
                 x: xPos,
+                width: width,
                 style: style
             });
+            console.log(`DEBUG: Added potential attribute cell: ID: ${cellId}, Value: '${value}', Y: ${yPos}, X: ${xPos}`);
         }
     }
 
-    // Sort cells primarily by Y-coordinate, then by X-coordinate
+    // Sort cells by Y-coordinate, then X-coordinate to group them into logical rows
     attributeCandidates.sort((a, b) => {
         if (a.y !== b.y) return a.y - b.y;
         return a.x - b.x;
     });
+    console.log(`DEBUG: Sorted entityCells for ${entityData.name}:`, attributeCandidates.map(c => ({id: c.id, value: c.value, y: c.y, x: c.x})));
 
-    let currentIsPk = false;
-    let currentIsFk = false;
 
-    for (let i = 0; i < attributeCandidates.length; i++) {
-        const cellInfo = attributeCandidates[i];
-        const cleanedValue = stripHtmlTags(cellInfo.value);
-        const upperCleanedValue = cleanedValue.toUpperCase();
+    const rows: typeof attributeCandidates[][] = [];
+    let currentRow: typeof attributeCandidates = [];
+    let lastY: number | null = null;
+    const tolerance = 5; // Tolerance for grouping cells into the same row
 
-        // Check if it's a key indicator
-        if (upperCleanedValue.includes('PK') || upperCleanedValue.includes('FK')) {
-            currentIsPk = upperCleanedValue.includes('PK');
-            currentIsFk = upperCleanedValue.includes('FK');
-            // The indicator applies to the *next* attribute found, so don't add this cell as an attribute itself.
-            continue;
+    for (const cellInfo of attributeCandidates) {
+        if (lastY === null || Math.abs(cellInfo.y - lastY) <= tolerance) {
+            currentRow.push(cellInfo);
+            lastY = cellInfo.y;
+        } else {
+            if (currentRow.length > 0) {
+                rows.push(currentRow);
+            }
+            currentRow = [cellInfo];
+            lastY = cellInfo.y;
+        }
+    }
+    if (currentRow.length > 0) {
+        rows.push(currentRow);
+    }
+    console.log(`DEBUG: Grouped rows for ${entityData.name}:`, rows.map((row, i) => `Row ${i}: [${row.map(c => c.value).join(', ')}]`));
+
+
+    for (const row of rows) {
+        if (row.length < 1) continue;
+
+        row.sort((a, b) => a.x - b.x); // Ensure cells within a row are sorted by X
+
+        let attrName: string | null = null;
+        for (const cellInfo of row) {
+            const value = cellInfo.value;
+            const cleanedValue = stripHtmlTags(value);
+            if (cleanedValue && !NON_ATTRIBUTE_VALUES.has(cleanedValue.toUpperCase()) && !isSimilarName(cleanedValue)) {
+                attrName = cleanedValue; // Use cleaned value as attribute name
+                console.log(`DEBUG: Found potential attrName '${attrName}' in row: [${row.map(c => c.value).join(', ')}]`);
+                break; 
+            } else {
+                console.log(`DEBUG: Skipping cell in row for attrName: '${value}' (cleaned: '${cleanedValue}', isNonAttr: ${NON_ATTRIBUTE_VALUES.has(cleanedValue.toUpperCase())}, isSimilarName: ${isSimilarName(cleanedValue)})`);
+            }
         }
 
-        // If it's not an indicator and not an entity name, it's likely an an attribute
-        if (!NON_ATTRIBUTE_VALUES.has(upperCleanedValue) && !isSimilarName(cleanedValue)) {
-            let isPk = currentIsPk;
-            let isFk = currentIsFk;
+        if (attrName) {
+            let isPk = false;
+            let isFk = false;
 
-            // If no explicit indicator was set, try to infer from expected keys
-            if (!isPk && !isFk) {
+            const indicatorCell = row.find(cell => 
+                cell.width > 0 && cell.width < 80 && 
+                (stripHtmlTags(cell.value).toUpperCase().includes('PK') || stripHtmlTags(cell.value).toUpperCase().includes('FK') || stripHtmlTags(cell.value).toUpperCase() === '')
+            );
+            
+            if (indicatorCell) {
+                const indicatorValue = stripHtmlTags(indicatorCell.value).toUpperCase();
+                isPk = indicatorValue.includes('PK');
+                isFk = indicatorValue.includes('FK');
+                console.log(`DEBUG: Indicator found for '${attrName}': '${indicatorValue}' -> PK: ${isPk}, FK: ${isFk}`);
+            } else {
+                // If no explicit indicator, infer from expected keys
                 isPk = fuzzyMatchAttribute(cleanedValue, expectedPks) !== null;
                 isFk = fuzzyMatchAttribute(cleanedValue, expectedFks) !== null;
+                console.log(`DEBUG: No explicit indicator for '${attrName}'. Inferring -> PK: ${isPk}, FK: ${isFk}`);
             }
 
             let typeStr = '';
@@ -499,15 +544,14 @@ function parseEntityAttributes(
             }
 
             entityData.attributes.push({
-                name: cleanedValue,
+                name: attrName,
                 type: typeStr,
                 is_pk: isPk,
                 is_fk: isFk
             });
-
-            // Reset key flags after an attribute has been processed
-            currentIsPk = false;
-            currentIsFk = false;
+            console.log(`DEBUG: Pushed attribute: ${attrName} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
+        } else {
+            console.log(`DEBUG: No attribute name found for row: [${row.map(c => c.value).join(', ')}]`);
         }
     }
 }
@@ -653,18 +697,27 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
         const expectedFks = EXPECTED_STRUCTURE[gtName]?.fk || [];
 
         for (const attr of entityData.attributes) {
-            if (attr.is_pk) {
-                const matchedPk = fuzzyMatchAttribute(attr.name, expectedPks);
-                if (matchedPk) {
-                    correctPks++;
-                }
+            console.log(`DEBUG: calculateScore processing attr: ${attr.name}, is_pk: ${attr.is_pk}, is_fk: ${attr.is_fk}`);
+            console.log(`DEBUG:   expectedPks for ${gtName}: [${expectedPks.join(', ')}]`);
+            console.log(`DEBUG:   expectedFks for ${gtName}: [${expectedFks.join(', ')}]`);
+
+            // Check if the attribute is marked as PK and is an expected PK for this entity
+            const isExpectedPk = fuzzyMatchAttribute(attr.name, expectedPks) !== null;
+            if (attr.is_pk && isExpectedPk) {
+                correctPks++;
+                console.log(`DEBUG:   Incremented correctPks for ${attr.name}`);
+            } else if (attr.is_pk && !isExpectedPk) {
+                console.log(`DEBUG:   PK mismatch: ${attr.name} is_pk=true but not expected PK for ${gtName}`);
             }
 
-            if (attr.is_fk) {
-                const matchedFk = fuzzyMatchAttribute(attr.name, expectedFks);
-                if (matchedFk) {
-                    correctFks++;
-                }
+
+            // Check if the attribute is marked as FK and is an expected FK for this entity
+            const isExpectedFk = fuzzyMatchAttribute(attr.name, expectedFks) !== null;
+            if (attr.is_fk && isExpectedFk) {
+                correctFks++;
+                console.log(`DEBUG:   Incremented correctFks for ${attr.name}`);
+            } else if (attr.is_fk && !isExpectedFk) {
+                console.log(`DEBUG:   FK mismatch: ${attr.name} is_fk=true but not expected FK for ${gtName}`);
             }
         }
     }
