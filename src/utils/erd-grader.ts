@@ -174,6 +174,11 @@ function extractMxGraphModel(xmlContent: string): Element | null {
     return null;
 }
 
+function stripHtmlTags(htmlString: string): string {
+    const doc = new DOMParser().parseFromString(htmlString, 'text/html');
+    return doc.body.textContent || "";
+}
+
 function levenshteinDistance(s1: string, s2: string): number {
     if (s1.length < s2.length) {
         return levenshteinDistance(s2, s1);
@@ -202,11 +207,13 @@ function normalizeName(name: string): string {
 }
 
 function isSimilarName(foundName: string): string | null {
-    if (foundName.length < 3 || foundName.toUpperCase().endsWith('ID')) {
+    // Strip HTML tags before processing
+    const cleanedFoundName = stripHtmlTags(foundName);
+    if (cleanedFoundName.length < 3 || cleanedFoundName.toUpperCase().endsWith('ID')) {
         return null;
     }
 
-    const foundNormalized = normalizeName(foundName);
+    const foundNormalized = normalizeName(cleanedFoundName);
 
     for (const expected of EXPECTED_ENTITY_NAMES_GROUND_TRUTH) {
         const expectedNormalized = normalizeName(expected);
@@ -240,7 +247,7 @@ function isSimilarName(foundName: string): string | null {
     if (foundNormalized in spellingVariations) {
         const target = spellingVariations[foundNormalized];
         for (const expected of EXPECTED_ENTITY_NAMES_GROUND_TRUTH) {
-            if (normalizeName(expected) === target) {
+            if (normalizeName(expected) === normalizeName(target)) {
                 return expected;
             }
         }
@@ -267,7 +274,9 @@ function isSimilarName(foundName: string): string | null {
 }
 
 function fuzzyMatchAttribute(foundAttr: string, expectedAttrs: string[]): string | null {
-    const foundNormalized = normalizeName(foundAttr);
+    // Strip HTML tags before processing
+    const cleanedFoundAttr = stripHtmlTags(foundAttr);
+    const foundNormalized = normalizeName(cleanedFoundAttr);
 
     for (const expected of expectedAttrs) {
         if (foundNormalized === normalizeName(expected)) {
@@ -369,7 +378,7 @@ function identifyEntities(rootElement: Element): { [id: string]: ParsedEntity } 
                     const childValue = child.getAttribute('value')?.trim();
                     const childStyle = child.getAttribute('style') || '';
                     // Heuristic: a non-empty value, not an attribute indicator (PK/FK), not a tableRow style, not a connector, and not ending in 'ID'
-                    return childValue && childValue.length > 2 && !NON_ATTRIBUTE_VALUES.has(childValue.toUpperCase()) && !childStyle.includes('tableRow') && !childStyle.includes('edge=1') && !childValue.toUpperCase().endsWith('ID');
+                    return childValue && childValue.length > 2 && !NON_ATTRIBUTE_VALUES.has(stripHtmlTags(childValue).toUpperCase()) && !childStyle.includes('tableRow') && !childStyle.includes('edge=1') && !stripHtmlTags(childValue).toUpperCase().endsWith('ID');
                 });
                 if (nameCell) {
                     entityName = nameCell.getAttribute('value')?.trim() || '';
@@ -380,14 +389,14 @@ function identifyEntities(rootElement: Element): { [id: string]: ParsedEntity } 
             const matchedExpectedName = isSimilarName(entityName);
             if (matchedExpectedName) {
                 entities[cellId] = {
-                    name: entityName,
+                    name: stripHtmlTags(entityName), // Store cleaned name
                     ground_truth_name: matchedExpectedName,
                     attributes: [],
                     id: cellId
                 };
-                console.log(`DEBUG: Identified entity: ${entityName} (ID: ${cellId}, GT: ${matchedExpectedName})`);
+                console.log(`DEBUG: Identified entity: ${stripHtmlTags(entityName)} (ID: ${cellId}, GT: ${matchedExpectedName})`);
             } else {
-                console.log(`DEBUG: Found entity container '${entityName}' (ID: ${cellId}) but no similar ground truth name. Value: '${entityName}'`);
+                console.log(`DEBUG: Found entity container '${stripHtmlTags(entityName)}' (ID: ${cellId}) but no similar ground truth name. Value: '${entityName}'`);
             }
         } else {
             // console.log(`DEBUG: Skipping non-top-level or non-entity container cell. ID: ${cellId}, Parent: ${parentId}, Value: '${cellValue}', Style: '${style.substring(0, 50)}...'`);
@@ -474,8 +483,10 @@ function parseEntityAttributes(
         let attrName: string | null = null;
         for (const cellInfo of row) {
             const value = cellInfo.value;
-            if (value && !NON_ATTRIBUTE_VALUES.has(value.toUpperCase()) && !isSimilarName(value)) {
-                attrName = value;
+            // Strip HTML tags from value before checking against NON_ATTRIBUTE_VALUES and isSimilarName
+            const cleanedValue = stripHtmlTags(value);
+            if (cleanedValue && !NON_ATTRIBUTE_VALUES.has(cleanedValue.toUpperCase()) && !isSimilarName(cleanedValue)) {
+                attrName = cleanedValue; // Use cleaned value as attribute name
                 break;
             }
         }
@@ -486,11 +497,11 @@ function parseEntityAttributes(
 
             const indicatorCell = row.find(cell => 
                 cell.width > 0 && cell.width < 80 && 
-                (cell.value.toUpperCase().includes('PK') || cell.value.toUpperCase().includes('FK') || cell.value.toUpperCase() === '')
+                (stripHtmlTags(cell.value).toUpperCase().includes('PK') || stripHtmlTags(cell.value).toUpperCase().includes('FK') || stripHtmlTags(cell.value).toUpperCase() === '')
             );
             
             if (indicatorCell) {
-                const indicatorValue = indicatorCell.value.toUpperCase();
+                const indicatorValue = stripHtmlTags(indicatorCell.value).toUpperCase();
                 isPk = indicatorValue.includes('PK');
                 isFk = indicatorValue.includes('FK');
             } else {
@@ -545,7 +556,7 @@ function identifyRelationships(
         const style = cell.getAttribute('style') || '';
         const sourceId = cell.getAttribute('source');
         const targetId = cell.getAttribute('target');
-        const relName = cell.getAttribute('value')?.trim() || '...';
+        const relName = stripHtmlTags(cell.getAttribute('value')?.trim() || '...'); // Strip HTML from relationship name
 
         const sourceEntityId = sourceId ? findEntityOwner(sourceId) : null;
         const targetEntityId = targetId ? findEntityOwner(targetId) : null;
