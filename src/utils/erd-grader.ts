@@ -50,12 +50,13 @@ function base64DecodeAndZlibDecompress(compressedData: string): string | null {
                 const decompressed = inflate(binData, { raw: wbits === -15, windowBits: wbits });
                 return new TextDecoder().decode(decompressed);
             } catch (e) {
-                // console.warn(`Decompression with wbits=${wbits} failed:`, e);
+                console.warn(`Decompression with wbits=${wbits} failed:`, e); // Added more specific logging
             }
         }
+        console.error("All zlib decompression attempts failed."); // Added more specific logging
         return null;
     } catch (e) {
-        // console.error("Base64 decode or initial zlib decompress failed:", e);
+        console.error("Base64 decode or initial zlib decompress setup failed:", e); // Added more specific logging
         return null;
     }
 }
@@ -87,12 +88,20 @@ function extractMxGraphModel(xmlContent: string): Element | null {
                     const mxModel = decompressedDoc.querySelector('mxGraphModel');
                     if (mxModel) {
                         return mxModel;
+                    } else {
+                        console.error("Decompressed XML does not contain mxGraphModel.");
                     }
+                } else {
+                    console.error("Failed to decompress diagram data.");
                 }
             } catch (e) {
                 console.error("Error processing compressed diagram data:", e);
             }
+        } else {
+            console.error("Diagram element found, but no compressed data (textContent) or direct mxGraphModel.");
         }
+    } else {
+        console.error("No 'diagram' element found in the XML content.");
     }
     return null;
 }
@@ -513,7 +522,7 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
     // 1. Fields (55 marks)
     const EXPECTED_FIELDS = 55;
     const allAttributesCount = Object.values(entities).reduce((sum, data) => sum + data.attributes.length, 0);
-    const fieldMarks = Math.min(EXPECTED_FIELDS, all_attributes_count);
+    const fieldMarks = Math.min(EXPECTED_FIELDS, allAttributesCount); // Corrected variable name
     currentScore += fieldMarks;
     feedbackPoints.Fields.push(
         `Found ${allAttributesCount}/${EXPECTED_FIELDS} fields. Awarded ${fieldMarks}/55 marks.`);
