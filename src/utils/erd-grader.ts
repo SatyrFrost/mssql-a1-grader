@@ -274,17 +274,27 @@ interface ParsedRelationship {
 }
 
 function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: ParsedEntity }, relationships: ParsedRelationship[] } {
+    console.log("DEBUG: Entering parseErdElements");
+    if (!mxGraphModel) {
+        console.error("DEBUG: mxGraphModel is null or undefined in parseErdElements.");
+        return { entities: {}, relationships: [] };
+    }
+    console.log("DEBUG: mxGraphModel received:", mxGraphModel.tagName);
+
     const entities: { [id: string]: ParsedEntity } = {};
     const relationships: ParsedRelationship[] = [];
     const allCells: { [id: string]: Element } = {};
     const parentMap: { [id: string]: string } = {};
 
-    const nonAttributeValues = new Set([...Array.from(EXPECTED_ENTITY_NAMES_GROUND_TRUTH), "PK", "FK", "PK, FK"]);
+    const nonAttributeValues = new Set([...Array.from(EXPECTED_ENTITY_NAMES_GROUND_TRUTH), "PK", "FK", "PK, FK", "PK,FK1", "PK,FK2"]);
 
-    // Pass 1: Collect all cells and identify REAL entities (swimlanes)
+    let totalCellsFound = 0;
     mxGraphModel.querySelectorAll('mxCell').forEach(cell => {
+        totalCellsFound++;
         const cellId = cell.getAttribute('id');
-        if (!cellId) return;
+        if (!cellId) {
+            return;
+        }
 
         allCells[cellId] = cell;
         const parentId = cell.getAttribute('parent');
@@ -304,15 +314,26 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                     attributes: [],
                     id: cellId
                 };
+                console.log(`DEBUG: Identified entity: ${value} (ID: ${cellId}, GT: ${matchedExpectedName})`);
+            } else {
+                console.log(`DEBUG: Found swimlane '${value}' (ID: ${cellId}) but no similar ground truth name. Value: '${value}'`);
             }
         }
     });
+    console.log(`DEBUG: Total mxCells processed: ${totalCellsFound}`);
+    console.log(`DEBUG: Entities identified after Pass 1: ${Object.keys(entities).length}`);
 
     const entityIds = new Set(Object.keys(entities));
 
     // Pass 2: Process attributes with fuzzy matching
+    console.log("DEBUG: Starting Pass 2: Processing attributes.");
     entityIds.forEach(entityId => {
         const entityData = entities[entityId];
+        if (!entityData) {
+            console.warn(`DEBUG: Entity data not found for ID: ${entityId}`);
+            return;
+        }
+        console.log(`DEBUG: Processing attributes for entity: ${entityData.name} (ID: ${entityId})`);
         const entityGtName = entityData.ground_truth_name;
         const expectedPks = EXPECTED_STRUCTURE[entityGtName]?.pk || [];
         const expectedFks = EXPECTED_STRUCTURE[entityGtName]?.fk || [];
@@ -349,6 +370,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                 });
             }
         }
+        console.log(`DEBUG: Found ${entityCells.length} potential attribute cells for ${entityData.name}`);
 
         entityCells.sort((a, b) => {
             if (a.y !== b.y) return a.y - b.y;
@@ -375,6 +397,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
         if (currentRow.length > 0) {
             rows.push(currentRow);
         }
+        console.log(`DEBUG: Organized ${entityCells.length} cells into ${rows.length} rows for ${entityData.name}`);
 
         for (const row of rows) {
             if (row.length < 1) continue;
@@ -382,11 +405,9 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
             row.sort((a, b) => a.x - b.x);
 
             let attrName: string | null = null;
-            // Find the actual attribute name cell (not the PK/FK indicator)
             for (const cellInfo of row) {
                 const value = cellInfo.value;
-                // Heuristic: attribute name is usually not "PK", "FK", "PK, FK" and not an entity name
-                if (value && !nonAttributeValues.has(value) && !isSimilarName(value)) {
+                if (value && !nonAttributeValues.has(value.toUpperCase()) && !isSimilarName(value)) {
                     attrName = value;
                     break;
                 }
@@ -396,23 +417,22 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                 let isPk = false;
                 let isFk = false;
 
-                // Check for an explicit indicator cell first (small width, specific values)
                 const indicatorCell = row.find(cell => 
                     cell.width > 0 && cell.width < 80 && 
                     (cell.value.toUpperCase().includes('PK') || cell.value.toUpperCase().includes('FK') || cell.value.toUpperCase() === '')
                 );
                 
                 if (indicatorCell) {
-                    // If an indicator cell exists, its content is the source of truth
                     const indicatorValue = indicatorCell.value.toUpperCase();
                     isPk = indicatorValue.includes('PK');
                     isFk = indicatorValue.includes('FK');
+                    console.log(`DEBUG: Attribute '${attrName}' for ${entityData.name}: Found indicator '${indicatorValue}', PK=${isPk}, FK=${isFk}`);
                 } else {
-                    // If no explicit indicator cell is found, then try fuzzy matching as a fallback
                     const matchedPk = fuzzyMatchAttribute(attrName, expectedPks);
                     const matchedFk = fuzzyMatchAttribute(attrName, expectedFks);
                     isPk = matchedPk !== null;
                     isFk = matchedFk !== null;
+                    console.log(`DEBUG: Attribute '${attrName}' for ${entityData.name}: No explicit indicator. PK=${isPk} (matched: ${matchedPk}), FK=${isFk} (matched: ${matchedFk})`);
                 }
 
                 let typeStr = '';
@@ -430,11 +450,15 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                     is_pk: isPk,
                     is_fk: isFk
                 });
+            } else {
+                console.log(`DEBUG: No attribute name found in row for entity ${entityData.name}. Row values: ${row.map(c => c.value).join(', ')}`);
             }
         }
     });
+    console.log(`DEBUG: Attributes processed for all entities.`);
 
     // Pass 3: Find relationships
+    console.log("DEBUG: Starting Pass 3: Finding relationships.");
     const seenRelationships = new Set<string>();
 
     const findEntityOwner = (cellId: string): string | null => {
@@ -450,7 +474,9 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
         return null;
     };
 
+    let totalEdgesFound = 0;
     mxGraphModel.querySelectorAll("mxCell[edge='1']").forEach(cell => {
+        totalEdgesFound++;
         const style = cell.getAttribute('style') || '';
         const sourceId = cell.getAttribute('source');
         const targetId = cell.getAttribute('target');
@@ -464,16 +490,17 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
             const relKey = `${sortedEntityIds[0]}-${sortedEntityIds[1]}`;
 
             if (seenRelationships.has(relKey)) {
+                console.log(`DEBUG: Skipping duplicate relationship key: ${relKey}`);
                 return;
             }
             seenRelationships.add(relKey);
 
             const startCard = style.includes('startArrow=ERmandOne') ? '1' :
                             style.includes('startArrow=ERzeroToMany') ? '0..N' :
-                            style.includes('startArrow=ERoneToMany') ? '1..N' : // Added 1..N
+                            style.includes('startArrow=ERoneToMany') ? '1..N' :
                             '?';
             const endCard = style.includes('endArrow=ERmandOne') ? '1' :
-                          (style.includes('endArrow=ERzeroToMany') || style.includes('endArrow=ERoneToMany')) ? '0..N' : // draw.io often uses ERoneToMany for 0..N
+                          (style.includes('endArrow=ERzeroToMany') || style.includes('endArrow=ERoneToMany')) ? '0..N' :
                           '?';
             const cardinality = `(${startCard}):(${endCard})`;
 
@@ -487,8 +514,13 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                 start_card: startCard,
                 end_card: endCard
             });
+            console.log(`DEBUG: Identified relationship: ${entities[sourceEntityId].name} -> ${entities[targetEntityId].name} (Card: ${cardinality})`);
+        } else {
+            console.log(`DEBUG: Skipping edge (ID: ${cell.getAttribute('id')}) due to missing source/target entity owner. Source ID: ${sourceId}, Target ID: ${targetId}`);
         }
     });
+    console.log(`DEBUG: Total edges processed: ${totalEdgesFound}`);
+    console.log(`DEBUG: Relationships identified after Pass 3: ${relationships.length}`);
 
     return { entities, relationships };
 }
@@ -697,10 +729,10 @@ Missing Tables: ${missingEntities.length > 0 ? missingEntities.sort().join(', ')
     report += `55 fields: ${fieldMarks} / 55\n`;
     report += `40 relationship parts: ${relationshipMarks} / 40\n`;
     report += `21 keys: ${keyMarks} / 21\n`;
-    report += `Total: ${maxRawScore}\n`; // Changed to show maxRawScore
+    report += `Total: ${maxRawScore}\n`;
     report += `Scaled Score (out of 40): ${scaledScore.toFixed(2)}\n`;
     report += `Percentage: ${percentage.toFixed(1)}%\n`;
-    report += `\n`; // Add an extra newline for separation
+    report += `\n`;
     report += `55\n`;
     report += `40\n`;
     report += `21\n`;
