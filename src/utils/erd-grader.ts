@@ -608,7 +608,7 @@ function identifyRelationships(
                 name: relName,
                 cardinality: cardinality,
                 start_card: startCard,
-                end_card: end_card
+                end_card: endCard // Corrected from end_card to endCard
             });
             console.log(`DEBUG: Identified relationship: ${entities[sourceEntityId].name} -> ${entities[targetEntityId].name} (Card: ${cardinality})`);
         }
