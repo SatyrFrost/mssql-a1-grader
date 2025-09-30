@@ -496,34 +496,55 @@ function parseEntityAttributes(
 
         row.sort((a, b) => a.x - b.x); // Ensure cells within a row are sorted by X
 
-        let isPk = false;
-        let isFk = false;
-        let attributeName: string | null = null;
+        let isPkInRow = false;
+        let isFkInRow = false;
+        let attributeNameCandidate: string | null = null;
+        const attributeNameCandidates: string[] = [];
 
-        // First pass: Identify key indicators and the attribute name within the row
         for (const cellInfo of row) {
             const cleanedValue = stripHtmlTags(cellInfo.value);
             const upperCleanedValue = cleanedValue.toUpperCase();
 
             if (upperCleanedValue.includes('PK')) {
-                isPk = true;
+                isPkInRow = true;
             }
             if (upperCleanedValue.includes('FK')) {
-                isFk = true;
+                isFkInRow = true;
             }
             
-            // If it's not an indicator and not an entity name, it's likely an attribute name
+            // Collect all non-indicator, non-entity-name values as potential attribute names
             if (!NON_ATTRIBUTE_VALUES.has(upperCleanedValue) && !isSimilarName(cleanedValue)) {
-                attributeName = cleanedValue;
+                attributeNameCandidates.push(cleanedValue);
             }
         }
 
-        if (attributeName) {
+        // Determine the actual attribute name from candidates
+        if (attributeNameCandidates.length === 1) {
+            attributeNameCandidate = attributeNameCandidates[0];
+        } else if (attributeNameCandidates.length > 1) {
+            // Heuristic: If there are multiple candidates, pick the one that doesn't end with 'ID'
+            // unless all of them end with 'ID'. Or pick the longest one.
+            const nonIdCandidates = attributeNameCandidates.filter(name => !name.toUpperCase().endsWith('ID'));
+            if (nonIdCandidates.length === 1) {
+                attributeNameCandidate = nonIdCandidates[0];
+            } else if (nonIdCandidates.length > 1) {
+                // If still multiple, pick the longest one as it's often more descriptive
+                attributeNameCandidate = nonIdCandidates.reduce((a, b) => a.length > b.length ? a : b, "");
+            } else {
+                // All candidates end with 'ID', pick the longest one
+                attributeNameCandidate = attributeNameCandidates.reduce((a, b) => a.length > b.length ? a : b, "");
+            }
+        }
+
+        if (attributeNameCandidate) {
+            let isPk = isPkInRow;
+            let isFk = isFkInRow;
+
             // If no explicit key indicators were found in the row, try to infer
             if (!isPk && !isFk) {
-                isPk = fuzzyMatchAttribute(attributeName, expectedPks) !== null;
-                isFk = fuzzyMatchAttribute(attributeName, expectedFks) !== null;
-                console.log(`DEBUG:   No explicit indicator for '${attributeName}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
+                isPk = fuzzyMatchAttribute(attributeNameCandidate, expectedPks) !== null;
+                isFk = fuzzyMatchAttribute(attributeNameCandidate, expectedFks) !== null;
+                console.log(`DEBUG:   No explicit indicator for '${attributeNameCandidate}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
             }
 
             let typeStr = '';
@@ -536,12 +557,12 @@ function parseEntityAttributes(
             }
 
             entityData.attributes.push({
-                name: attributeName,
+                name: attributeNameCandidate,
                 type: typeStr,
                 is_pk: isPk,
                 is_fk: isFk
             });
-            console.log(`DEBUG: Pushed attribute: ${attributeName} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
+            console.log(`DEBUG: Pushed attribute: ${attributeNameCandidate} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
         } else {
             console.log(`DEBUG: No attribute name found for row: [${row.map(c => c.value).join(', ')}]`);
         }
@@ -671,7 +692,7 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
 
     // 1. Fields (55 marks)
     const EXPECTED_FIELDS = 55;
-    const allAttributesCount = Object.values(entities).reduce((sum, data) => sum + data.attributes.length, 0);
+    const allAttributesCount = Object.values(entities).reduce((sum, data => sum + data.attributes.length, 0);
     const fieldMarks = Math.min(EXPECTED_FIELDS, allAttributesCount);
     currentScore += fieldMarks;
     feedbackPoints.Fields.push(
