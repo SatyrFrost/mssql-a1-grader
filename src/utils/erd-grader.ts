@@ -66,6 +66,7 @@ function extractMxGraphModel(xmlContent: string): Element | null {
     let doc: Document;
     try {
         doc = parser.parseFromString(xmlContent, "text/xml");
+        console.log("DEBUG: XML parsed successfully.");
     } catch (e) {
         console.error("FATAL ERROR: Could not parse XML content.", e);
         return null;
@@ -73,35 +74,41 @@ function extractMxGraphModel(xmlContent: string): Element | null {
 
     const diagram = doc.querySelector('diagram');
     if (diagram) {
+        console.log("DEBUG: 'diagram' element found.");
         const mxModelDirect = diagram.querySelector('mxGraphModel');
         if (mxModelDirect) {
+            console.log("DEBUG: 'mxGraphModel' found directly within 'diagram'.");
             return mxModelDirect;
-        }
-
-        const compressedData = diagram.textContent?.trim();
-        if (compressedData) {
-            try {
-                const unquotedData = decodeURIComponent(compressedData);
-                const decompressedXmlString = base64DecodeAndZlibDecompress(unquotedData);
-                if (decompressedXmlString) {
-                    const decompressedDoc = parser.parseFromString(decompressedXmlString, "text/xml");
-                    const mxModel = decompressedDoc.querySelector('mxGraphModel');
-                    if (mxModel) {
-                        return mxModel;
-                    } else {
-                        console.error("Decompressed XML does not contain mxGraphModel.");
-                    }
-                } else {
-                    console.error("Failed to decompress diagram data.");
-                }
-            } catch (e) {
-                console.error("Error processing compressed diagram data:", e);
-            }
         } else {
-            console.error("Diagram element found, but no compressed data (textContent) or direct mxGraphModel.");
+            console.log("DEBUG: 'mxGraphModel' NOT found directly within 'diagram'. Checking for compressed data.");
+            const compressedData = diagram.textContent?.trim();
+            if (compressedData) {
+                console.log("DEBUG: Compressed data found. Attempting decompression.");
+                try {
+                    const unquotedData = decodeURIComponent(compressedData);
+                    const decompressedXmlString = base64DecodeAndZlibDecompress(unquotedData);
+                    if (decompressedXmlString) {
+                        console.log("DEBUG: Decompression successful. Parsing decompressed XML.");
+                        const decompressedDoc = parser.parseFromString(decompressedXmlString, "text/xml");
+                        const mxModel = decompressedDoc.querySelector('mxGraphModel');
+                        if (mxModel) {
+                            console.log("DEBUG: 'mxGraphModel' found in decompressed XML.");
+                            return mxModel;
+                        } else {
+                            console.error("DEBUG: Decompressed XML does not contain mxGraphModel.");
+                        }
+                    } else {
+                        console.error("DEBUG: Failed to decompress diagram data.");
+                    }
+                } catch (e) {
+                    console.error("DEBUG: Error processing compressed diagram data:", e);
+                }
+            } else {
+                console.error("DEBUG: Diagram element found, but no compressed data (textContent) or direct mxGraphModel.");
+            }
         }
     } else {
-        console.error("No 'diagram' element found in the XML content.");
+        console.error("DEBUG: No 'diagram' element found in the XML content.");
     }
     return null;
 }
