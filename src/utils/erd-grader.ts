@@ -483,12 +483,16 @@ function parseEntityAttributes(
         let attrName: string | null = null;
         for (const cellInfo of row) {
             const value = cellInfo.value;
-            // Strip HTML tags from value before checking against NON_ATTRIBUTE_VALUES and isSimilarName
             const cleanedValue = stripHtmlTags(value);
-            if (cleanedValue && !NON_ATTRIBUTE_VALUES.has(cleanedValue.toUpperCase()) && !isSimilarName(cleanedValue)) {
-                attrName = cleanedValue; // Use cleaned value as attribute name
-                break;
+            const style = cellInfo.style || '';
+
+            // Skip cells that are table rows themselves, or empty, or indicators, or entity names
+            if (style.includes('tableRow') || !cleanedValue || NON_ATTRIBUTE_VALUES.has(cleanedValue.toUpperCase()) || isSimilarName(cleanedValue)) {
+                continue; 
             }
+            
+            attrName = cleanedValue;
+            break; // Found the attribute name for this logical row
         }
 
         if (attrName) {
@@ -857,7 +861,7 @@ export function gradeErd(xmlContent: string): { report: string; score: number } 
         const reportContent = generateReport(entities, relationships, rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities, fieldMarks, keyMarks, relationshipMarks);
 
         console.log(reportContent);
-        console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (${percentage.toFixed(1)}%)`);
+        console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (%.toFixed(1)}%)`);
         console.log(`55`);
         console.log(`40`);
         console.log(`21`);
