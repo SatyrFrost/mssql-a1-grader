@@ -1,6 +1,6 @@
 import { inflate } from 'pako';
 
-// --- Constants for Expected Structure (Translated from Python) ---
+// --- Constants for Expected Structure ---
 const EXPECTED_ENTITY_NAMES_GROUND_TRUTH = new Set([
     "CUSTOMER", "PAYMENT", "LU_COLOUR", "SALE", "SALESPERSON",
     "CAR", "ORDERS", "ORDERSPRODUCT", "PRODUCT", "SUPPLIER"
@@ -32,7 +32,59 @@ const EXPECTED_RELATIONSHIPS: { [key: string]: [string, string] } = {
     "PRODUCT_ORDERSPRODUCT": ["1", "0..N"]
 };
 
-// --- Utility Functions (Translated from Python) ---
+const NON_ATTRIBUTE_VALUES = new Set([...Array.from(EXPECTED_ENTITY_NAMES_GROUND_TRUTH), "PK", "FK", "PK, FK", "PK,FK1", "PK,FK2"]);
+
+// --- Type Definitions ---
+interface EntityAttribute {
+    name: string;
+    type: string;
+    is_pk: boolean;
+    is_fk: boolean;
+}
+
+interface ParsedEntity {
+    name: string;
+    ground_truth_name: string;
+    attributes: EntityAttribute[];
+    id: string;
+}
+
+interface ParsedRelationship {
+    source: string;
+    source_gt: string;
+    target: string;
+    target_gt: string;
+    name: string;
+    cardinality: string;
+    start_card: string;
+    end_card: string;
+}
+
+interface GradingFeedback {
+    Fields: string[];
+    Keys: string[];
+    Relationships: string[];
+    Relationship_Details: {
+        rel: ParsedRelationship;
+        expected: [string, string];
+        correct_source: boolean;
+        correct_target: boolean;
+    }[];
+}
+
+interface ScoreDetails {
+    rawScore: number;
+    scaledScore: number;
+    percentage: number;
+    MAX_RAW_SCORE: number;
+    feedbackPoints: GradingFeedback;
+    missingEntities: string[];
+    fieldMarks: number;
+    keyMarks: number;
+    relationshipMarks: number;
+}
+
+// --- Utility Functions ---
 
 function base64DecodeAndZlibDecompress(compressedData: string): string | null {
     const cleanedData = compressedData.replace(/ /g, '+').replace(/&#xa;/g, '').replace(/\n/g, '').trim();
@@ -44,19 +96,18 @@ function base64DecodeAndZlibDecompress(compressedData: string): string | null {
         const charData = decodedData.split('').map(c => c.charCodeAt(0));
         const binData = new Uint8Array(charData);
 
-        // Try different wbits values for zlib decompression
-        for (const wbits of [15, -15, 31]) { // pako's default is 15, -15 for raw, 31 for gzip
+        for (const wbits of [15, -15, 31]) {
             try {
                 const decompressed = inflate(binData, { raw: wbits === -15, windowBits: wbits });
                 return new TextDecoder().decode(decompressed);
             } catch (e) {
-                console.warn(`Decompression with wbits=${wbits} failed:`, e); // Added more specific logging
+                console.warn(`Decompression with wbits=${wbits} failed:`, e);
             }
         }
-        console.error("All zlib decompression attempts failed."); // Added more specific logging
+        console.error("All zlib decompression attempts failed.");
         return null;
     } catch (e) {
-        console.error("Base64 decode or initial zlib decompress setup failed:", e); // Added more specific logging
+        console.error("Base64 decode or initial zlib decompress setup failed:", e);
         return null;
     }
 }
@@ -164,7 +215,6 @@ function isSimilarName(foundName: string): string | null {
         }
     }
 
-    // Plurals
     if (foundNormalized.endsWith('S')) {
         for (const expected of EXPECTED_ENTITY_NAMES_GROUND_TRUTH) {
             const expectedNormalized = normalizeName(expected);
@@ -182,12 +232,9 @@ function isSimilarName(foundName: string): string | null {
         }
     }
 
-    // Common spelling variations
     const spellingVariations: { [key: string]: string } = {
-        'COLOR': 'COLOUR',
-        'COLOUR': 'COLOUR',
-        'LUCOLOR': 'LUCOLOUR',
-        'LUCOLOUR': 'LUCOLOUR',
+        'COLOR': 'COLOUR', 'COLOUR': 'COLOUR',
+        'LUCOLOR': 'LUCOLOUR', 'LUCOLOUR': 'LUCOLOUR',
     };
 
     if (foundNormalized in spellingVariations) {
@@ -265,227 +312,198 @@ function fuzzyMatchAttribute(foundAttr: string, expectedAttrs: string[]): string
     return bestMatch;
 }
 
-interface EntityAttribute {
-    name: string;
-    type: string;
-    is_pk: boolean;
-    is_fk: boolean;
-}
-
-interface ParsedEntity {
-    name: string;
-    ground_truth_name: string;
-    attributes: EntityAttribute[];
-    id: string;
-}
-
-interface ParsedRelationship {
-    source: string;
-    source_gt: string;
-    target: string;
-    target_gt: string;
-    name: string;
-    cardinality: string;
-    start_card: string;
-    end_card: string;
-}
-
-function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: ParsedEntity }, relationships: ParsedRelationship[] } {
-    console.log("DEBUG: Entering parseErdElements");
-    if (!mxGraphModel) {
-        console.error("DEBUG: mxGraphModel is null or undefined in parseErdElements.");
-        return { entities: {}, relationships: [] };
-    }
-    console.log("DEBUG: mxGraphModel received:", mxGraphModel.tagName);
-
-    const entities: { [id: string]: ParsedEntity } = {};
-    const relationships: ParsedRelationship[] = [];
+// Helper to collect all cells and their parent relationships
+function collectAllCellsAndParents(rootElement: Element): { allCells: { [id: string]: Element }, parentMap: { [id: string]: string } } {
     const allCells: { [id: string]: Element } = {};
     const parentMap: { [id: string]: string } = {};
 
-    const nonAttributeValues = new Set([...Array.from(EXPECTED_ENTITY_NAMES_GROUND_TRUTH), "PK", "FK", "PK, FK", "PK,FK1", "PK,FK2"]);
-
-    const rootElement = mxGraphModel.querySelector('root');
-    if (!rootElement) {
-        console.error("DEBUG: No 'root' element found within mxGraphModel. Cannot parse cells.");
-        return { entities: {}, relationships: [] };
-    }
-    console.log("DEBUG: 'root' element found.");
-
-
-    let totalCellsFound = 0;
     rootElement.querySelectorAll('mxCell').forEach(cell => {
-        totalCellsFound++;
         const cellId = cell.getAttribute('id');
-        if (!cellId) {
-            console.warn("DEBUG: mxCell found without an ID.");
-            return;
+        if (cellId) {
+            allCells[cellId] = cell;
+            const parentId = cell.getAttribute('parent');
+            if (parentId) {
+                parentMap[cellId] = parentId;
+            }
         }
+    });
+    return { allCells, parentMap };
+}
 
-        allCells[cellId] = cell;
-        const parentId = cell.getAttribute('parent');
-        if (parentId) {
-            parentMap[cellId] = parentId;
-        }
+// Helper to identify entities (swimlanes)
+function identifyEntities(rootElement: Element): { [id: string]: ParsedEntity } {
+    const entities: { [id: string]: ParsedEntity } = {};
+    rootElement.querySelectorAll('mxCell').forEach(cell => {
+        const cellId = cell.getAttribute('id');
+        if (!cellId) return;
 
-        const value = cell.getAttribute('value')?.trim() || '';
         const style = cell.getAttribute('style') || '';
 
+        // Check for swimlane (table)
         if (style.toLowerCase().includes('swimlane')) {
-            console.log(`DEBUG: Processing potential swimlane cell ID: ${cellId}, value: '${value}', style: '${style}'`);
-            const matchedExpectedName = isSimilarName(value);
+            let entityName = cell.getAttribute('value')?.trim() || '';
+
+            // If the swimlane itself has no value, look for a child cell that might be the name
+            if (!entityName) {
+                const childCells = Array.from(rootElement.querySelectorAll(`mxCell[parent="${cellId}"]`));
+                const nameCell = childCells.find(child => {
+                    const childValue = child.getAttribute('value')?.trim();
+                    const childStyle = child.getAttribute('style') || '';
+                    // Heuristic: a non-empty value, not an attribute indicator (PK/FK), and not a tableRow style
+                    return childValue && !childValue.toUpperCase().includes('PK') && !childValue.toUpperCase().includes('FK') && !childStyle.includes('tableRow');
+                });
+                if (nameCell) {
+                    entityName = nameCell.getAttribute('value')?.trim() || '';
+                }
+            }
+
+            const matchedExpectedName = isSimilarName(entityName);
             if (matchedExpectedName) {
                 entities[cellId] = {
-                    name: value,
+                    name: entityName,
                     ground_truth_name: matchedExpectedName,
                     attributes: [],
                     id: cellId
                 };
-                console.log(`DEBUG: Identified entity: ${value} (ID: ${cellId}, GT: ${matchedExpectedName})`);
+                console.log(`DEBUG: Identified entity: ${entityName} (ID: ${cellId}, GT: ${matchedExpectedName})`);
             } else {
-                console.log(`DEBUG: Found swimlane '${value}' (ID: ${cellId}) but no similar ground truth name. Value: '${value}'`);
+                console.log(`DEBUG: Found swimlane '${entityName}' (ID: ${cellId}) but no similar ground truth name. Value: '${entityName}'`);
             }
         }
     });
-    console.log(`DEBUG: Total mxCells processed: ${totalCellsFound}`);
-    console.log(`DEBUG: Entities identified after Pass 1: ${Object.keys(entities).length}`);
+    return entities;
+}
 
-    const entityIds = new Set(Object.keys(entities)); // Moved this line here
+// Helper to parse attributes for a single entity
+function parseEntityAttributes(
+    entityId: string,
+    entityData: ParsedEntity,
+    allCells: { [id: string]: Element },
+    parentMap: { [id: string]: string }
+): void {
+    const entityGtName = entityData.ground_truth_name;
+    const expectedPks = EXPECTED_STRUCTURE[entityGtName]?.pk || [];
+    const expectedFks = EXPECTED_STRUCTURE[entityGtName]?.fk || [];
 
-    // Pass 2: Process attributes with fuzzy matching
-    console.log("DEBUG: Starting Pass 2: Processing attributes.");
-    entityIds.forEach(entityId => {
-        const entityData = entities[entityId];
-        if (!entityData) {
-            console.warn(`DEBUG: Entity data not found for ID: ${entityId}`);
-            return;
-        }
-        console.log(`DEBUG: Processing attributes for entity: ${entityData.name} (ID: ${entityId})`);
-        const entityGtName = entityData.ground_truth_name;
-        const expectedPks = EXPECTED_STRUCTURE[entityGtName]?.pk || [];
-        const expectedFks = EXPECTED_STRUCTURE[entityGtName]?.fk || [];
-
-        const entityCells: { id: string; value: string; y: number; x: number; width: number; style: string }[] = [];
-        for (const cellId in allCells) {
-            let currentId: string | undefined = cellId;
-            let found = false;
-            let depth = 0;
-            while (currentId && depth < 10) {
-                if (currentId === entityId) {
-                    found = true;
-                    break;
-                }
-                currentId = parentMap[currentId];
-                depth++;
+    const entityCells: { id: string; value: string; y: number; x: number; width: number; style: string }[] = [];
+    for (const cellId in allCells) {
+        let currentId: string | undefined = cellId;
+        let found = false;
+        let depth = 0;
+        while (currentId && depth < 10) {
+            if (currentId === entityId) {
+                found = true;
+                break;
             }
-
-            if (found && cellId !== entityId) {
-                const cell = allCells[cellId];
-                const value = cell.getAttribute('value')?.trim() || '';
-                const geometry = cell.querySelector('mxGeometry');
-                const yPos = parseFloat(geometry?.getAttribute('y') || '0');
-                const xPos = parseFloat(geometry?.getAttribute('x') || '0');
-                const width = parseFloat(geometry?.getAttribute('width') || '0');
-
-                entityCells.push({
-                    id: cellId,
-                    value: value,
-                    y: yPos,
-                    x: xPos,
-                    width: width,
-                    style: cell.getAttribute('style') || ''
-                });
-            }
+            currentId = parentMap[currentId];
+            depth++;
         }
-        console.log(`DEBUG: Found ${entityCells.length} potential attribute cells for ${entityData.name}`);
 
-        entityCells.sort((a, b) => {
-            if (a.y !== b.y) return a.y - b.y;
-            return a.x - b.x;
-        });
+        if (found && cellId !== entityId) {
+            const cell = allCells[cellId];
+            const value = cell.getAttribute('value')?.trim() || '';
+            const geometry = cell.querySelector('mxGeometry');
+            const yPos = parseFloat(geometry?.getAttribute('y') || '0');
+            const xPos = parseFloat(geometry?.getAttribute('x') || '0');
+            const width = parseFloat(geometry?.getAttribute('width') || '0');
 
-        const rows: typeof entityCells[][] = [];
-        let currentRow: typeof entityCells = [];
-        let lastY: number | null = null;
-        const tolerance = 5;
-
-        for (const cellInfo of entityCells) {
-            if (lastY === null || Math.abs(cellInfo.y - lastY) <= tolerance) {
-                currentRow.push(cellInfo);
-                lastY = cellInfo.y;
-            } else {
-                if (currentRow.length > 0) {
-                    rows.push(currentRow);
-                }
-                currentRow = [cellInfo];
-                lastY = cellInfo.y;
-            }
+            entityCells.push({
+                id: cellId,
+                value: value,
+                y: yPos,
+                x: xPos,
+                width: width,
+                style: cell.getAttribute('style') || ''
+            });
         }
-        if (currentRow.length > 0) {
-            rows.push(currentRow);
-        }
-        console.log(`DEBUG: Organized ${entityCells.length} cells into ${rows.length} rows for ${entityData.name}`);
+    }
 
-        for (const row of rows) {
-            if (row.length < 1) continue;
-
-            row.sort((a, b) => a.x - b.x);
-
-            let attrName: string | null = null;
-            for (const cellInfo of row) {
-                const value = cellInfo.value;
-                if (value && !nonAttributeValues.has(value.toUpperCase()) && !isSimilarName(value)) {
-                    attrName = value;
-                    break;
-                }
-            }
-
-            if (attrName) {
-                let isPk = false;
-                let isFk = false;
-
-                const indicatorCell = row.find(cell => 
-                    cell.width > 0 && cell.width < 80 && 
-                    (cell.value.toUpperCase().includes('PK') || cell.value.toUpperCase().includes('FK') || cell.value.toUpperCase() === '')
-                );
-                
-                if (indicatorCell) {
-                    const indicatorValue = indicatorCell.value.toUpperCase();
-                    isPk = indicatorValue.includes('PK');
-                    isFk = indicatorValue.includes('FK');
-                    console.log(`DEBUG: Attribute '${attrName}' for ${entityData.name}: Found indicator '${indicatorValue}', PK=${isPk}, FK=${isFk}`);
-                } else {
-                    const matchedPk = fuzzyMatchAttribute(attrName, expectedPks);
-                    const matchedFk = fuzzyMatchAttribute(attrName, expectedFks);
-                    isPk = matchedPk !== null;
-                    isFk = matchedFk !== null;
-                    console.log(`DEBUG: Attribute '${attrName}' for ${entityData.name}: No explicit indicator. PK=${isPk} (matched: ${matchedPk}), FK=${isFk} (matched: ${matchedFk})`);
-                }
-
-                let typeStr = '';
-                if (isPk && isFk) {
-                    typeStr = 'PK, FK';
-                } else if (isPk) {
-                    typeStr = 'PK';
-                } else if (isFk) {
-                    typeStr = 'FK';
-                }
-
-                entityData.attributes.push({
-                    name: attrName,
-                    type: typeStr,
-                    is_pk: isPk,
-                    is_fk: isFk
-                });
-            } else {
-                console.log(`DEBUG: No attribute name found in row for entity ${entityData.name}. Row values: ${row.map(c => c.value).join(', ')}`);
-            }
-        }
+    entityCells.sort((a, b) => {
+        if (a.y !== b.y) return a.y - b.y;
+        return a.x - b.x;
     });
-    console.log(`DEBUG: Attributes processed for all entities.`);
 
-    // Pass 3: Find relationships
-    console.log("DEBUG: Starting Pass 3: Finding relationships.");
+    const rows: typeof entityCells[][] = [];
+    let currentRow: typeof entityCells = [];
+    let lastY: number | null = null;
+    const tolerance = 5;
+
+    for (const cellInfo of entityCells) {
+        if (lastY === null || Math.abs(cellInfo.y - lastY) <= tolerance) {
+            currentRow.push(cellInfo);
+            lastY = cellInfo.y;
+        } else {
+            if (currentRow.length > 0) {
+                rows.push(currentRow);
+            }
+            currentRow = [cellInfo];
+            lastY = cellInfo.y;
+        }
+    }
+    if (currentRow.length > 0) {
+        rows.push(currentRow);
+    }
+
+    for (const row of rows) {
+        if (row.length < 1) continue;
+
+        row.sort((a, b) => a.x - b.x);
+
+        let attrName: string | null = null;
+        for (const cellInfo of row) {
+            const value = cellInfo.value;
+            if (value && !NON_ATTRIBUTE_VALUES.has(value.toUpperCase()) && !isSimilarName(value)) {
+                attrName = value;
+                break;
+            }
+        }
+
+        if (attrName) {
+            let isPk = false;
+            let isFk = false;
+
+            const indicatorCell = row.find(cell => 
+                cell.width > 0 && cell.width < 80 && 
+                (cell.value.toUpperCase().includes('PK') || cell.value.toUpperCase().includes('FK') || cell.value.toUpperCase() === '')
+            );
+            
+            if (indicatorCell) {
+                const indicatorValue = indicatorCell.value.toUpperCase();
+                isPk = indicatorValue.includes('PK');
+                isFk = indicatorValue.includes('FK');
+            } else {
+                const matchedPk = fuzzyMatchAttribute(attrName, expectedPks);
+                const matchedFk = fuzzyMatchAttribute(attrName, expectedFks);
+                isPk = matchedPk !== null;
+                isFk = matchedFk !== null;
+            }
+
+            let typeStr = '';
+            if (isPk && isFk) {
+                typeStr = 'PK, FK';
+            } else if (isPk) {
+                typeStr = 'PK';
+            } else if (isFk) {
+                typeStr = 'FK';
+            }
+
+            entityData.attributes.push({
+                name: attrName,
+                type: typeStr,
+                is_pk: isPk,
+                is_fk: isFk
+            });
+        }
+    }
+}
+
+// Helper to identify relationships
+function identifyRelationships(
+    rootElement: Element,
+    entities: { [id: string]: ParsedEntity },
+    parentMap: { [id: string]: string }
+): ParsedRelationship[] {
+    const relationships: ParsedRelationship[] = [];
     const seenRelationships = new Set<string>();
 
     const findEntityOwner = (cellId: string): string | null => {
@@ -501,9 +519,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
         return null;
     };
 
-    let totalEdgesFound = 0;
     rootElement.querySelectorAll("mxCell[edge='1']").forEach(cell => {
-        totalEdgesFound++;
         const style = cell.getAttribute('style') || '';
         const sourceId = cell.getAttribute('source');
         const targetId = cell.getAttribute('target');
@@ -517,7 +533,6 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
             const relKey = `${sortedEntityIds[0]}-${sortedEntityIds[1]}`;
 
             if (seenRelationships.has(relKey)) {
-                console.log(`DEBUG: Skipping duplicate relationship key: ${relKey}`);
                 return;
             }
             seenRelationships.add(relKey);
@@ -542,39 +557,53 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                 end_card: endCard
             });
             console.log(`DEBUG: Identified relationship: ${entities[sourceEntityId].name} -> ${entities[targetEntityId].name} (Card: ${cardinality})`);
-        } else {
-            console.log(`DEBUG: Skipping edge (ID: ${cell.getAttribute('id')}) due to missing source/target entity owner. Source ID: ${sourceId}, Target ID: ${targetId}`);
         }
     });
-    console.log(`DEBUG: Total edges processed: ${totalEdgesFound}`);
+    return relationships;
+}
+
+// --- Main Parsing Function ---
+function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: ParsedEntity }, relationships: ParsedRelationship[] } {
+    console.log("DEBUG: Entering parseErdElements");
+    if (!mxGraphModel) {
+        console.error("DEBUG: mxGraphModel is null or undefined in parseErdElements.");
+        return { entities: {}, relationships: [] };
+    }
+    console.log("DEBUG: mxGraphModel received:", mxGraphModel.tagName);
+
+    const rootElement = mxGraphModel.querySelector('root');
+    if (!rootElement) {
+        console.error("DEBUG: No 'root' element found within mxGraphModel. Cannot parse cells.");
+        return { entities: {}, relationships: [] };
+    }
+    console.log("DEBUG: 'root' element found.");
+
+    const { allCells, parentMap } = collectAllCellsAndParents(rootElement);
+    console.log(`DEBUG: Total mxCells processed: ${Object.keys(allCells).length}`);
+
+    const entities = identifyEntities(rootElement);
+    console.log(`DEBUG: Entities identified after Pass 1: ${Object.keys(entities).length}`);
+
+    console.log("DEBUG: Starting Pass 2: Processing attributes.");
+    Object.keys(entities).forEach(entityId => {
+        const entityData = entities[entityId];
+        if (!entityData) {
+            console.warn(`DEBUG: Entity data not found for ID: ${entityId}`);
+            return;
+        }
+        console.log(`DEBUG: Processing attributes for entity: ${entityData.name} (ID: ${entityId})`);
+        parseEntityAttributes(entityId, entityData, allCells, parentMap);
+    });
+    console.log(`DEBUG: Attributes processed for all entities.`);
+
+    console.log("DEBUG: Starting Pass 3: Finding relationships.");
+    const relationships = identifyRelationships(rootElement, entities, parentMap);
     console.log(`DEBUG: Relationships identified after Pass 3: ${relationships.length}`);
 
     return { entities, relationships };
 }
 
-interface GradingFeedback {
-    Fields: string[];
-    Keys: string[];
-    Relationships: string[];
-    Relationship_Details: {
-        rel: ParsedRelationship;
-        expected: [string, string];
-        correct_source: boolean;
-        correct_target: boolean;
-    }[];
-}
-
-interface ScoreDetails {
-    rawScore: number;
-    scaledScore: number;
-    percentage: number;
-    MAX_RAW_SCORE: number;
-    feedbackPoints: GradingFeedback;
-    missingEntities: string[];
-    fieldMarks: number;
-    keyMarks: number;
-    relationshipMarks: number;
-}
+// --- Scoring and Reporting Functions ---
 
 function calculateScore(entities: { [id: string]: ParsedEntity }, relationships: ParsedRelationship[]): ScoreDetails {
     const MAX_RAW_SCORE = 116;
