@@ -694,9 +694,9 @@ Missing Tables: ${missingEntities.length > 0 ? missingEntities.sort().join(', ')
     report += "\n---";
 
     report += `\n\n## Excel-Friendly Summary\n\n`;
-    report += `55 fields: ${fieldMarks}\n`;
-    report += `40 relationship parts: ${relationshipMarks}\n`;
-    report += `21 keys: ${keyMarks}\n`;
+    report += `55 fields: ${fieldMarks} / 55\n`;
+    report += `40 relationship parts: ${relationshipMarks} / 40\n`;
+    report += `21 keys: ${keyMarks} / 21\n`;
     report += `Total: ${rawScore}\n`;
     report += `Scaled Score (out of 40): ${scaledScore.toFixed(2)}\n`;
     report += `Percentage: ${percentage.toFixed(1)}%\n`;
