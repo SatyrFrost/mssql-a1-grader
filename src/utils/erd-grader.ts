@@ -692,7 +692,7 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
 
     // 1. Fields (55 marks)
     const EXPECTED_FIELDS = 55;
-    const allAttributesCount = Object.values(entities).reduce((sum, data => sum + data.attributes.length, 0);
+    const allAttributesCount = Object.values(entities).reduce((sum, data) => sum + data.attributes.length, 0);
     const fieldMarks = Math.min(EXPECTED_FIELDS, allAttributesCount);
     currentScore += fieldMarks;
     feedbackPoints.Fields.push(
