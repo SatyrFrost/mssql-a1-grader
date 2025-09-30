@@ -485,7 +485,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
                 name: relName,
                 cardinality: cardinality,
                 start_card: startCard,
-                end_card: endCard // Corrected from end_card to endCard
+                end_card: endCard
             });
         }
     });
@@ -520,8 +520,8 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
 
     // 1. Fields (55 marks)
     const EXPECTED_FIELDS = 55;
-    const allAttributesCount = Object.values(entities).reduce((sum, data => sum + data.attributes.length), 0);
-    const fieldMarks = Math.min(EXPECTED_FIELDS, allAttributesCount); // Corrected variable name
+    const allAttributesCount = Object.values(entities).reduce((sum, data) => sum + data.attributes.length, 0);
+    const fieldMarks = Math.min(EXPECTED_FIELDS, allAttributesCount);
     currentScore += fieldMarks;
     feedbackPoints.Fields.push(
         `Found ${allAttributesCount}/${EXPECTED_FIELDS} fields. Awarded ${fieldMarks}/55 marks.`);
