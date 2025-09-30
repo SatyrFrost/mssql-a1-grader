@@ -733,6 +733,9 @@ export function gradeErd(xmlContent: string): { report: string; score: number } 
 
         console.log(reportContent);
         console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (${percentage.toFixed(1)}%)`);
+        console.log(`55`);
+        console.log(`40`);
+        console.log(`21`);
         return { report: reportContent, score: scaledScore };
     } else {
         console.error("GRADING FAILED: The diagram file could not be parsed.");
