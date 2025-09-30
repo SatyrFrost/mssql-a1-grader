@@ -333,27 +333,47 @@ function collectAllCellsAndParents(rootElement: Element): { allCells: { [id: str
 // Helper to identify entities (swimlanes)
 function identifyEntities(rootElement: Element): { [id: string]: ParsedEntity } {
     const entities: { [id: string]: ParsedEntity } = {};
+    const graphRootId = rootElement.querySelector('mxCell[id="1"]')?.getAttribute('id'); // Assuming '1' is the main graph root
+
     rootElement.querySelectorAll('mxCell').forEach(cell => {
         const cellId = cell.getAttribute('id');
         if (!cellId) return;
 
+        const parentId = cell.getAttribute('parent');
         const style = cell.getAttribute('style') || '';
+        let cellValue = cell.getAttribute('value')?.trim() || '';
 
-        // Check for swimlane (table)
-        if (style.toLowerCase().includes('swimlane')) {
-            let entityName = cell.getAttribute('value')?.trim() || '';
+        // An entity container should typically be a direct child of the main graph root (id="1")
+        // and have a style indicating it's a table/swimlane.
+        const isTopLevelEntityContainer = (parentId === graphRootId || parentId === '1') &&
+                                         (style.toLowerCase().includes('swimlane') || style.toLowerCase().includes('shape=table'));
 
-            // If the swimlane itself has no value, look for a child cell that might be the name
-            if (!entityName) {
+        if (isTopLevelEntityContainer) {
+            console.log(`DEBUG: Found TOP-LEVEL entity container. ID: ${cellId}, Initial Value: '${cellValue}', Style: '${style}'`);
+
+            let entityName = cellValue;
+
+            // If the container itself has no value, or a generic value, look for a child cell that might be the name
+            if (!entityName || entityName.toLowerCase().includes('table')) {
                 const childCells = Array.from(rootElement.querySelectorAll(`mxCell[parent="${cellId}"]`));
+                // Sort children by y-position to find the "header" cell first
+                childCells.sort((a, b) => {
+                    const geomA = a.querySelector('mxGeometry');
+                    const geomB = b.querySelector('mxGeometry');
+                    const yA = parseFloat(geomA?.getAttribute('y') || '0');
+                    const yB = parseFloat(geomB?.getAttribute('y') || '0');
+                    return yA - yB;
+                });
+
                 const nameCell = childCells.find(child => {
                     const childValue = child.getAttribute('value')?.trim();
                     const childStyle = child.getAttribute('style') || '';
-                    // Heuristic: a non-empty value, not an attribute indicator (PK/FK), and not a tableRow style
-                    return childValue && !childValue.toUpperCase().includes('PK') && !childValue.toUpperCase().includes('FK') && !childStyle.includes('tableRow');
+                    // Heuristic: a non-empty value, not an attribute indicator (PK/FK), not a tableRow style, not a connector, and not ending in 'ID'
+                    return childValue && childValue.length > 2 && !NON_ATTRIBUTE_VALUES.has(childValue.toUpperCase()) && !childStyle.includes('tableRow') && !childStyle.includes('edge=1') && !childValue.toUpperCase().endsWith('ID');
                 });
                 if (nameCell) {
                     entityName = nameCell.getAttribute('value')?.trim() || '';
+                    console.log(`DEBUG: Found entity name in child cell: '${entityName}' for parent ID: ${cellId}`);
                 }
             }
 
@@ -367,8 +387,10 @@ function identifyEntities(rootElement: Element): { [id: string]: ParsedEntity } 
                 };
                 console.log(`DEBUG: Identified entity: ${entityName} (ID: ${cellId}, GT: ${matchedExpectedName})`);
             } else {
-                console.log(`DEBUG: Found swimlane '${entityName}' (ID: ${cellId}) but no similar ground truth name. Value: '${entityName}'`);
+                console.log(`DEBUG: Found entity container '${entityName}' (ID: ${cellId}) but no similar ground truth name. Value: '${entityName}'`);
             }
+        } else {
+            // console.log(`DEBUG: Skipping non-top-level or non-entity container cell. ID: ${cellId}, Parent: ${parentId}, Value: '${cellValue}', Style: '${style.substring(0, 50)}...'`);
         }
     });
     return entities;
