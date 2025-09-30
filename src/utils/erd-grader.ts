@@ -350,6 +350,8 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
     console.log(`DEBUG: Total mxCells processed: ${totalCellsFound}`);
     console.log(`DEBUG: Entities identified after Pass 1: ${Object.keys(entities).length}`);
 
+    const entityIds = new Set(Object.keys(entities)); // Moved this line here
+
     // Pass 2: Process attributes with fuzzy matching
     console.log("DEBUG: Starting Pass 2: Processing attributes.");
     entityIds.forEach(entityId => {
