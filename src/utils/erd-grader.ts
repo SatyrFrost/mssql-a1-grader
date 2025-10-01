@@ -522,45 +522,51 @@ function parseEntityAttributes(
                 x: xPos,
                 style: style
             });
+            console.log(`DEBUG:     Added candidate for ${entityData.name}: ID=${cellId}, Value='${value}', Y=${yPos}, X=${xPos}`);
         }
     }
-
-    // Add the debug log here to see all candidates before grouping
-    console.log(`DEBUG:   Raw attribute candidates for ${entityData.name} (before sorting/grouping):`);
-    attributeCandidates.forEach(c => console.log(`DEBUG:     - ID: ${c.id}, Value: '${c.value}', Y: ${c.y}, X: ${c.x}, Style: '${c.style.substring(0, 50)}...'`));
-
 
     attributeCandidates.sort((a, b) => {
         if (a.y !== b.y) return a.y - b.y;
         return a.x - b.x;
     });
 
-    // Refined logic to process attributes and their associated key indicators
-    let currentKeyIndicators: typeof attributeCandidates = [];
-    let lastValidAttributeCell: typeof attributeCandidates[0] | null = null;
+    const tolerance = 5; // Tolerance for Y-coordinate to consider cells on the same "row"
 
-    for (const cellInfo of attributeCandidates) {
-        const cleanedValue = stripHtmlTags(cellInfo.value);
+    for (let i = 0; i < attributeCandidates.length; i++) {
+        const currentCell = attributeCandidates[i];
+        const cleanedValue = stripHtmlTags(currentCell.value);
         const upperCleanedValue = cleanedValue.toUpperCase();
 
-        if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
-            // This is a key indicator cell (e.g., "PK", "FK")
-            currentKeyIndicators.push(cellInfo);
-        } else if (cleanedValue.length > 0) {
-            // This is a non-empty, non-key-indicator cell, so it's an attribute name.
-            // Process the previous valid attribute (if any) with the keys collected so far.
-            if (lastValidAttributeCell) {
-                processAndPushAttribute(entityData, lastValidAttributeCell, currentKeyIndicators, expectedPks, expectedFks);
-                currentKeyIndicators = []; // Reset keys after processing an attribute
-            }
-            lastValidAttributeCell = cellInfo; // Set the new attribute
-        }
-        // If it's an empty cell and not a key indicator, we simply ignore it for attribute processing.
-    }
+        // If it's an attribute name (non-empty and not a key indicator)
+        if (cleanedValue.length > 0 && !KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
+            const keysForThisAttribute: typeof attributeCandidates = [];
+            
+            // Look backwards for key indicators on the same Y-level immediately preceding this attribute
+            for (let j = i - 1; j >= 0; j--) {
+                const prevCell = attributeCandidates[j];
+                const prevCleanedValue = stripHtmlTags(prevCell.value);
+                const prevUpperCleanedValue = prevCleanedValue.toUpperCase();
 
-    // Process the very last attribute if there's one pending after the loop finishes
-    if (lastValidAttributeCell) {
-        processAndPushAttribute(entityData, lastValidAttributeCell, currentKeyIndicators, expectedPks, expectedFks);
+                // If the previous cell is on a different Y-level, stop looking for keys for this attribute
+                if (Math.abs(prevCell.y - currentCell.y) > tolerance) {
+                    break;
+                }
+
+                // If it's a key indicator on the same Y-level, add it
+                if (KEY_INDICATOR_VALUES.has(prevUpperCleanedValue)) {
+                    keysForThisAttribute.unshift(prevCell); // Add to the beginning to maintain original order
+                } else if (prevCleanedValue.length > 0) {
+                    // If we hit another non-key, non-empty cell on the same Y-level, stop looking
+                    // This prevents keys from "jumping over" other attributes
+                    break;
+                }
+                // If it's an empty cell, continue looking backwards
+            }
+            
+            processAndPushAttribute(entityData, currentCell, keysForThisAttribute, expectedPks, expectedFks);
+        }
+        // If it's a key indicator or an empty cell, it will be handled when an attribute is found later.
     }
 }
 
