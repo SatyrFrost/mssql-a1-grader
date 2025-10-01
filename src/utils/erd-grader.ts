@@ -6,6 +6,24 @@ const EXPECTED_ENTITY_NAMES_GROUND_TRUTH = new Set([
     "CAR", "ORDERS", "ORDERSPRODUCT", "PRODUCT", "SUPPLIER"
 ]);
 
+// Define the full expected structure including all attributes
+const EXPECTED_STRUCTURE_FULL: { [key: string]: { pk: string[]; fk: string[]; allAttributes: string[] } } = {
+    "CUSTOMER": { "pk": ["CustomerID"], "fk": [], "allAttributes": ["CustomerID", "Name", "Address"] },
+    "PAYMENT": { "pk": ["PaymentInvoiceID"], "fk": ["CustomerID", "InvoiceID"], "allAttributes": ["PaymentInvoiceID", "CustomerID", "InvoiceID", "Amount"] },
+    "LU_COLOUR": { "pk": ["ColourID"], "fk": [], "allAttributes": ["ColourID", "ColourName"] },
+    "SALE": { "pk": ["InvoiceID"], "fk": ["CustomerID", "SalespersonID", "RegistrationID"], "allAttributes": ["InvoiceID", "CustomerID", "SalespersonID", "RegistrationID", "SaleDate"] },
+    "SALESPERSON": { "pk": ["SalespersonID"], "fk": [], "allAttributes": ["SalespersonID", "Name", "Phone"] },
+    "CAR": { "pk": ["RegistrationID"], "fk": ["ColourID"], "allAttributes": ["RegistrationID", "ColourID", "Make", "Model"] },
+    "ORDERS": { "pk": ["OrderID"], "fk": ["SupplierID", "SalespersonID"], "allAttributes": ["OrderID", "SupplierID", "SalespersonID", "OrderDate"] },
+    "ORDERSPRODUCT": { "pk": ["OrderID", "ProductID"], "fk": ["OrderID", "ProductID"], "allAttributes": ["OrderID", "ProductID", "Quantity"] },
+    "PRODUCT": { "pk": ["ProductID"], "fk": [], "allAttributes": ["ProductID", "Name", "Price"] },
+    "SUPPLIER": { "pk": ["SupplierID"], "fk": [], "allAttributes": ["SupplierID", "Name", "Contact"] }
+};
+
+// Calculate EXPECTED_FIELDS dynamically from EXPECTED_STRUCTURE_FULL
+const EXPECTED_FIELDS = Object.values(EXPECTED_STRUCTURE_FULL).reduce((sum, s) => sum + s.allAttributes.length, 0); // Should be 34
+
+// Update EXPECTED_STRUCTURE to be used for PK/FK checks (it was already correct for PK/FKs)
 const EXPECTED_STRUCTURE: { [key: string]: { pk: string[]; fk: string[] } } = {
     "CUSTOMER": { "pk": ["CustomerID"], "fk": [] },
     "PAYMENT": { "pk": ["PaymentInvoiceID"], "fk": ["CustomerID", "InvoiceID"] },
@@ -19,13 +37,14 @@ const EXPECTED_STRUCTURE: { [key: string]: { pk: string[]; fk: string[] } } = {
     "SUPPLIER": { "pk": ["SupplierID"], "fk": [] }
 };
 
+// Keep EXPECTED_RELATIONSHIPS as the ground truth, assuming the user's diagram might be incorrect for LU_COLOUR_CAR
 const EXPECTED_RELATIONSHIPS: { [key: string]: [string, string] } = {
     "CUSTOMER_PAYMENT": ["1", "0..N"],
     "CUSTOMER_SALE": ["1", "0..N"],
     "PAYMENT_SALE": ["0..N", "1"],
     "SALE_CAR": ["1", "0..N"],
     "SALE_SALESPERSON": ["0..N", "1"],
-    "LU_COLOUR_CAR": ["1", "0..N"],
+    "LU_COLOUR_CAR": ["1", "0..N"], // LU_COLOUR (1) -> CAR (0..N) is the ground truth
     "SUPPLIER_ORDERS": ["1", "0..N"],
     "SALESPERSON_ORDERS": ["1", "0..N"],
     "ORDERS_ORDERSPRODUCT": ["1", "0..N"],
@@ -661,7 +680,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
 // --- Scoring and Reporting Functions ---
 
 function calculateScore(entities: { [id: string]: ParsedEntity }, relationships: ParsedRelationship[]): ScoreDetails {
-    const MAX_RAW_SCORE = 116;
+    const MAX_RAW_SCORE = 116; // This will be adjusted based on the new EXPECTED_FIELDS and other counts
     let currentScore = 0;
     const feedbackPoints: GradingFeedback = {
         Fields: [],
@@ -673,13 +692,12 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
     const entityGroundTruthNamesFound = new Set(Object.values(entities).map(data => data.ground_truth_name));
     const missingEntities = new Set(Array.from(EXPECTED_ENTITY_NAMES_GROUND_TRUTH).filter(e => !entityGroundTruthNamesFound.has(e)));
 
-    // 1. Fields (55 marks)
-    const EXPECTED_FIELDS = 55;
+    // 1. Fields (dynamically calculated marks)
     const allAttributesCount = Object.values(entities).reduce((sum, data) => sum + data.attributes.length, 0);
     const fieldMarks = Math.min(EXPECTED_FIELDS, allAttributesCount);
     currentScore += fieldMarks;
     feedbackPoints.Fields.push(
-        `Found ${allAttributesCount}/${EXPECTED_FIELDS} fields. Awarded ${fieldMarks}/55 marks.`);
+        `Found ${allAttributesCount}/${EXPECTED_FIELDS} fields. Awarded ${fieldMarks}/${EXPECTED_FIELDS} marks.`);
 
     // 2. Keys (21 marks) - with fuzzy matching
     let correctPks = 0;
@@ -751,18 +769,27 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
         }
 
         if (expectedCard) {
+            console.log(`DEBUG:   Relationship match found for ${relKey} (reversed: ${isReversed}).`);
             connectionMarks += 2;
+            console.log(`DEBUG:     Connection marks: ${connectionMarks}`);
 
             const [expectedSourceCard, expectedTargetCard] = isReversed ? [expectedCard[1], expectedCard[0]] : [expectedCard[0], expectedCard[1]];
+            console.log(`DEBUG:     Parsed: (${rel.start_card}):(${rel.end_card}), Expected: (${expectedSourceCard}):(${expectedTargetCard})`);
 
             const correctSource = rel.start_card === expectedSourceCard;
             const correctTarget = rel.end_card === expectedTargetCard;
 
             if (correctSource) {
                 sourceCardinalityMarks += 1;
+                console.log(`DEBUG:     Source cardinality correct. Source marks: ${sourceCardinalityMarks}`);
+            } else {
+                console.log(`DEBUG:     Source cardinality INCORRECT. Parsed: ${rel.start_card}, Expected: ${expectedSourceCard}`);
             }
             if (correctTarget) {
                 targetCardinalityMarks += 1;
+                console.log(`DEBUG:     Target cardinality correct. Target marks: ${targetCardinalityMarks}`);
+            } else {
+                console.log(`DEBUG:     Target cardinality INCORRECT. Parsed: ${rel.end_card}, Expected: ${expectedTargetCard}`);
             }
 
             matchedRelationships.push({
@@ -771,6 +798,8 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
                 correct_source: correctSource,
                 correct_target: correctTarget
             });
+        } else {
+            console.log(`DEBUG:   No expected relationship found for ${relKey} or ${relKeyReverse}.`);
         }
     }
 
@@ -786,11 +815,14 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
 
     feedbackPoints.Relationship_Details = matchedRelationships;
 
+    // Adjust MAX_RAW_SCORE based on the new EXPECTED_FIELDS
+    const newMaxRawScore = EXPECTED_FIELDS + totalExpectedPks + totalExpectedFks + 40; // 40 for relationships
+    
     const rawScore = currentScore;
-    const scaledScore = (currentScore / MAX_RAW_SCORE) * 40;
-    const percentage = (currentScore / MAX_RAW_SCORE) * 100;
+    const scaledScore = (currentScore / newMaxRawScore) * 40;
+    const percentage = (currentScore / newMaxRawScore) * 100;
 
-    return { rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities: Array.from(missingEntities), fieldMarks, keyMarks, relationshipMarks };
+    return { rawScore, scaledScore, percentage, MAX_RAW_SCORE: newMaxRawScore, feedbackPoints, missingEntities: Array.from(missingEntities), fieldMarks, keyMarks, relationshipMarks };
 }
 
 function generateReport(
@@ -846,14 +878,14 @@ Missing Tables: ${missingEntities.length > 0 ? missingEntities.sort().join(', ')
     report += "\n---";
 
     report += `\n\n## Excel-Friendly Summary\n\n`;
-    report += `55 fields: ${fieldMarks} / 55\n`;
+    report += `${EXPECTED_FIELDS} fields: ${fieldMarks} / ${EXPECTED_FIELDS}\n`;
     report += `40 relationship parts: ${relationshipMarks} / 40\n`;
     report += `21 keys: ${keyMarks} / 21\n`;
     report += `Total: ${maxRawScore}\n`;
     report += `Scaled Score (out of 40): ${scaledScore.toFixed(2)}\n`;
     report += `Percentage: ${percentage.toFixed(1)}%\n`;
     report += `\n`;
-    report += `55\n`;
+    report += `${EXPECTED_FIELDS}\n`;
     report += `40\n`;
     report += `21\n`;
 
@@ -891,7 +923,7 @@ export function gradeErd(xmlContent: string): { report: string; score: number } 
 
         console.log(reportContent);
         console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (${percentage.toFixed(1)}%)`);
-        console.log(`55`);
+        console.log(`${EXPECTED_FIELDS}`);
         console.log(`40`);
         console.log(`21`);
         return { report: reportContent, score: scaledScore };
