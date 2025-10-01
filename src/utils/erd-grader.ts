@@ -449,10 +449,19 @@ function processAndPushAttribute(
         return;
     }
 
+    console.log(`DEBUG:     Processing attribute '${attributeName}' with key indicators: ${keyIndicators.map(k => k.value).join(', ')}`);
+
     for (const keyCell of keyIndicators) {
         const upperKey = stripHtmlTags(keyCell.value).toUpperCase();
-        if (upperKey.includes('PK')) isPk = true;
-        if (upperKey.includes('FK')) isFk = true;
+        console.log(`DEBUG:       Checking key: '${upperKey}'`);
+        if (upperKey.includes('PK')) {
+            isPk = true;
+            console.log(`DEBUG:         isPk set to true by '${upperKey}'`);
+        }
+        if (upperKey.includes('FK')) {
+            isFk = true;
+            console.log(`DEBUG:         isFk set to true by '${upperKey}'`);
+        }
     }
 
     let typeStr = '';
@@ -463,6 +472,8 @@ function processAndPushAttribute(
     } else if (isFk) {
         typeStr = 'FK';
     }
+
+    console.log(`DEBUG:     Final key status for '${attributeName}': is_pk=${isPk}, is_fk=${isFk}, typeStr='${typeStr}'`);
 
     entityData.attributes.push({
         name: matchedExpectedAttribute,
@@ -486,87 +497,61 @@ function parseEntityAttributes(
     const expectedPks = EXPECTED_STRUCTURE[entityGtName]?.pk || [];
     const expectedFks = EXPECTED_STRUCTURE[entityGtName]?.fk || [];
 
-    const attributeCandidates: { id: string; value: string; y: number; x: number; style: string }[] = [];
+    const entityElement = allCells[entityId];
+    if (!entityElement) {
+        console.error(`ERROR: Entity element not found for ID: ${entityId}`);
+        return;
+    }
+
+    const tableRows: { id: string; y: number; cells: { id: string; value: string; x: number; style: string }[] }[] = [];
+
+    // Collect all direct children of the entity that are tableRows
     for (const cellId in allCells) {
         const cell = allCells[cellId];
-        const parentOfCell = parentMap[cellId];
-
-        let isChildOfEntity = false;
-        let currentParentId: string | undefined = parentOfCell;
-        let depth = 0;
-        while (currentParentId && depth < 5) {
-            if (currentParentId === entityId) {
-                isChildOfEntity = true;
-                break;
-            }
-            currentParentId = parentMap[currentParentId];
-            depth++;
-        }
-
-        if (isChildOfEntity && cellId !== entityId) {
-            const value = cell.getAttribute('value')?.trim() || '';
-            const style = cell.getAttribute('style') || '';
+        if (parentMap[cellId] === entityId && cell.getAttribute('style')?.includes('tableRow')) {
             const geometry = cell.querySelector('mxGeometry');
             const yPos = parseFloat(geometry?.getAttribute('y') || '0');
-            const xPos = parseFloat(geometry?.getAttribute('x') || '0');
-
-            // Only skip tableRow containers, allow empty values for potential key indicators
-            if (style.includes('tableRow')) {
-                continue;
-            }
-
-            attributeCandidates.push({
-                id: cellId,
-                value: value,
-                y: yPos,
-                x: xPos,
-                style: style
-            });
-            console.log(`DEBUG:     Added candidate for ${entityData.name}: ID=${cellId}, Value='${value}', Y=${yPos}, X=${xPos}`);
+            tableRows.push({ id: cellId, y: yPos, cells: [] });
         }
     }
 
-    attributeCandidates.sort((a, b) => {
-        if (a.y !== b.y) return a.y - b.y;
-        return a.x - b.x;
-    });
+    // Sort tableRows by their y-position
+    tableRows.sort((a, b) => a.y - b.y);
 
-    const tolerance = 5; // Tolerance for Y-coordinate to consider cells on the same "row"
-
-    for (let i = 0; i < attributeCandidates.length; i++) {
-        const currentCell = attributeCandidates[i];
-        const cleanedValue = stripHtmlTags(currentCell.value);
-        const upperCleanedValue = cleanedValue.toUpperCase();
-
-        // If it's an attribute name (non-empty and not a key indicator)
-        if (cleanedValue.length > 0 && !KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
-            const keysForThisAttribute: typeof attributeCandidates = [];
-            
-            // Look backwards for key indicators on the same Y-level immediately preceding this attribute
-            for (let j = i - 1; j >= 0; j--) {
-                const prevCell = attributeCandidates[j];
-                const prevCleanedValue = stripHtmlTags(prevCell.value);
-                const prevUpperCleanedValue = prevCleanedValue.toUpperCase();
-
-                // If the previous cell is on a different Y-level, stop looking for keys for this attribute
-                if (Math.abs(prevCell.y - currentCell.y) > tolerance) {
-                    break;
-                }
-
-                // If it's a key indicator on the same Y-level, add it
-                if (KEY_INDICATOR_VALUES.has(prevUpperCleanedValue)) {
-                    keysForThisAttribute.unshift(prevCell); // Add to the beginning to maintain original order
-                } else if (prevCleanedValue.length > 0) {
-                    // If we hit another non-key, non-empty cell on the same Y-level, stop looking
-                    // This prevents keys from "jumping over" other attributes
-                    break;
-                }
-                // If it's an empty cell, continue looking backwards
+    // For each tableRow, collect its direct children (attributes and keys)
+    for (const row of tableRows) {
+        const rowCells: { id: string; value: string; x: number; style: string }[] = [];
+        for (const cellId in allCells) {
+            const cell = allCells[cellId];
+            if (parentMap[cellId] === row.id) { // Direct child of the current row
+                const value = cell.getAttribute('value')?.trim() || '';
+                const style = cell.getAttribute('style') || '';
+                const geometry = cell.querySelector('mxGeometry');
+                const xPos = parseFloat(geometry?.getAttribute('x') || '0');
+                rowCells.push({ id: cellId, value: value, x: xPos, style: style });
             }
-            
-            processAndPushAttribute(entityData, currentCell, keysForThisAttribute, expectedPks, expectedFks);
         }
-        // If it's a key indicator or an empty cell, it will be handled when an attribute is found later.
+        // Sort cells within the row by their x-position
+        rowCells.sort((a, b) => a.x - b.x);
+        row.cells = rowCells;
+    }
+
+    // Now process the collected rows and their cells
+    for (const row of tableRows) {
+        let currentKeyIndicators: { id: string; value: string; x: number; style: string }[] = []; // Reset for each row
+        for (const cellInfo of row.cells) {
+            const cleanedValue = stripHtmlTags(cellInfo.value);
+            const upperCleanedValue = cleanedValue.toUpperCase();
+
+            if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
+                currentKeyIndicators.push(cellInfo);
+            } else if (cleanedValue.length > 0) {
+                // This is an attribute name
+                processAndPushAttribute(entityData, cellInfo, currentKeyIndicators, expectedPks, expectedFks);
+                currentKeyIndicators = []; // Reset keys after processing an attribute
+            }
+            // Empty cells that are not key indicators are ignored.
+        }
     }
 }
 
