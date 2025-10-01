@@ -428,11 +428,10 @@ function parseEntityAttributes(
         const cell = allCells[cellId];
         const parentOfCell = parentMap[cellId];
 
-        // Check if the cell is a child of the entity (direct or nested within tableRow)
         let isChildOfEntity = false;
         let currentParentId: string | undefined = parentOfCell;
         let depth = 0;
-        while (currentParentId && depth < 5) { // Limit depth to avoid infinite loops
+        while (currentParentId && depth < 5) {
             if (currentParentId === entityId) {
                 isChildOfEntity = true;
                 break;
@@ -441,14 +440,13 @@ function parseEntityAttributes(
             depth++;
         }
 
-        if (isChildOfEntity && cellId !== entityId) { // Exclude the entity container itself
+        if (isChildOfEntity && cellId !== entityId) {
             const value = cell.getAttribute('value')?.trim() || '';
             const style = cell.getAttribute('style') || '';
             const geometry = cell.querySelector('mxGeometry');
             const yPos = parseFloat(geometry?.getAttribute('y') || '0');
             const xPos = parseFloat(geometry?.getAttribute('x') || '0');
 
-            // Skip cells that are purely structural table rows or empty
             if (style.includes('tableRow') || !value) {
                 continue;
             }
@@ -463,7 +461,6 @@ function parseEntityAttributes(
         }
     }
 
-    // Sort cells primarily by Y-coordinate, then by X-coordinate
     attributeCandidates.sort((a, b) => {
         if (a.y !== b.y) return a.y - b.y;
         return a.x - b.x;
@@ -472,7 +469,7 @@ function parseEntityAttributes(
     const rows: typeof attributeCandidates[][] = [];
     let currentRow: typeof attributeCandidates = [];
     let lastY: number | null = null;
-    const tolerance = 5; // Tolerance for grouping cells into the same row
+    const tolerance = 5;
 
     for (const cellInfo of attributeCandidates) {
         if (lastY === null || Math.abs(cellInfo.y - lastY) <= tolerance) {
@@ -495,56 +492,62 @@ function parseEntityAttributes(
     for (const row of rows) {
         if (row.length < 1) continue;
 
-        row.sort((a, b) => a.x - b.x); // Ensure cells within a row are sorted by X
+        row.sort((a, b) => a.x - b.x);
 
-        let isPkInRow = false;
-        let isFkInRow = false;
-        const attributeNamesInRow: string[] = []; // Collect all attribute names in this row
+        let nextAttributeIsPk = false;
+        let nextAttributeIsFk = false;
+
+        console.log(`DEBUG:   Processing new row for ${entityData.name}. Initial flags: PK=${nextAttributeIsPk}, FK=${nextAttributeIsFk}`);
 
         for (const cellInfo of row) {
-            const cleanedValue = stripHtmlTags(cellInfo.value);
+            const rawValue = cellInfo.value; // Keep raw value for debug
+            const cleanedValue = stripHtmlTags(rawValue);
             const upperCleanedValue = cleanedValue.toUpperCase();
 
+            console.log(`DEBUG:     Cell (raw): '${rawValue}' (ID: ${cellInfo.id})`);
+            console.log(`DEBUG:     Cell (cleaned): '${cleanedValue}' (ID: ${cellInfo.id})`);
+
             if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
-                if (upperCleanedValue.includes('PK')) isPkInRow = true;
-                if (upperCleanedValue.includes('FK')) isFkInRow = true;
+                // If it's a key indicator, set flags for the *next* attribute encountered in this row
+                if (upperCleanedValue.includes('PK')) nextAttributeIsPk = true;
+                if (upperCleanedValue.includes('FK')) nextAttributeIsFk = true;
+                console.log(`DEBUG:       Identified as KEY INDICATOR. Updated flags: PK=${nextAttributeIsPk}, FK=${nextAttributeIsFk}`);
             } else {
-                // This is an attribute name. Collect it.
-                attributeNamesInRow.push(cleanedValue);
+                // This is an attribute name. Apply the flags that were set by the *immediately preceding* key indicator.
+                let isPk = nextAttributeIsPk;
+                let isFk = nextAttributeIsFk;
+
+                // If no explicit key indicators were found immediately before this attribute, try to infer
+                if (!isPk && !isFk) {
+                    isPk = fuzzyMatchAttribute(cleanedValue, expectedPks) !== null;
+                    isFk = fuzzyMatchAttribute(cleanedValue, expectedFks) !== null;
+                    console.log(`DEBUG:       No explicit indicator for '${cleanedValue}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
+                } else {
+                    console.log(`DEBUG:       Applying explicit flags for '${cleanedValue}'. PK=${isPk}, FK=${isFk}`);
+                }
+
+                let typeStr = '';
+                if (isPk && isFk) {
+                    typeStr = 'PK, FK';
+                } else if (isPk) {
+                    typeStr = 'PK';
+                } else if (isFk) {
+                    typeStr = 'FK';
+                }
+
+                entityData.attributes.push({
+                    name: cleanedValue,
+                    type: typeStr,
+                    is_pk: isPk,
+                    is_fk: isFk
+                });
+                console.log(`DEBUG: Pushed attribute: ${cleanedValue} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
+
+                // Reset flags *after* processing this attribute, so they don't apply to subsequent attributes in the same row.
+                nextAttributeIsPk = false;
+                nextAttributeIsFk = false;
+                console.log(`DEBUG:       Flags reset for next attribute. PK=${nextAttributeIsPk}, FK=${nextAttributeIsFk}`);
             }
-        }
-
-        // Now, for each attribute name collected in this row, create an attribute object
-        for (const attrName of attributeNamesInRow) {
-            let isPk = isPkInRow;
-            let isFk = isFkInRow;
-
-            // If no explicit key indicators were found in the row, try to infer
-            if (!isPk && !isFk) {
-                isPk = fuzzyMatchAttribute(attrName, expectedPks) !== null;
-                isFk = fuzzyMatchAttribute(attrName, expectedFks) !== null;
-                console.log(`DEBUG:   No explicit indicator for '${attrName}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
-            }
-
-            let typeStr = '';
-            if (isPk && isFk) {
-                typeStr = 'PK, FK';
-            } else if (isPk) {
-                typeStr = 'PK';
-            } else if (isFk) {
-                typeStr = 'FK';
-            }
-
-            entityData.attributes.push({
-                name: attrName,
-                type: typeStr,
-                is_pk: isPk,
-                is_fk: isFk
-            });
-            console.log(`DEBUG: Pushed attribute: ${attrName} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
-        }
-        if (attributeNamesInRow.length === 0) {
-            console.log(`DEBUG: No attribute name found for row: [${row.map(c => stripHtmlTags(c.value)).join(', ')}]`);
         }
     }
 }
