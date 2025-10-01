@@ -423,12 +423,11 @@ function parseEntityAttributes(
     const expectedPks = EXPECTED_STRUCTURE[entityGtName]?.pk || [];
     const expectedFks = EXPECTED_STRUCTURE[entityGtName]?.fk || [];
 
-    const attributeCandidates: { id: string; value: string; y: number; x: number; style: string }[] = [];
+    const attributeCells: { id: string; value: string; y: number; x: number; style: string }[] = [];
     for (const cellId in allCells) {
         const cell = allCells[cellId];
         const parentOfCell = parentMap[cellId];
 
-        // Check if the cell is a child of the entity (direct or nested within tableRow)
         let isChildOfEntity = false;
         let currentParentId: string | undefined = parentOfCell;
         let depth = 0;
@@ -453,7 +452,7 @@ function parseEntityAttributes(
                 continue;
             }
 
-            attributeCandidates.push({
+            attributeCells.push({
                 id: cellId,
                 value: value,
                 y: yPos,
@@ -464,17 +463,17 @@ function parseEntityAttributes(
     }
 
     // Sort cells primarily by Y-coordinate, then by X-coordinate
-    attributeCandidates.sort((a, b) => {
+    attributeCells.sort((a, b) => {
         if (a.y !== b.y) return a.y - b.y;
         return a.x - b.x;
     });
 
-    const rows: typeof attributeCandidates[][] = [];
-    let currentRow: typeof attributeCandidates = [];
+    const rows: typeof attributeCells[][] = [];
+    let currentRow: typeof attributeCells = [];
     let lastY: number | null = null;
     const tolerance = 5; // Tolerance for grouping cells into the same row
 
-    for (const cellInfo of attributeCandidates) {
+    for (const cellInfo of attributeCells) {
         if (lastY === null || Math.abs(cellInfo.y - lastY) <= tolerance) {
             currentRow.push(cellInfo);
             lastY = cellInfo.y;
@@ -497,32 +496,33 @@ function parseEntityAttributes(
 
         row.sort((a, b) => a.x - b.x); // Ensure cells within a row are sorted by X
 
-        let isPkInRow = false;
-        let isFkInRow = false;
-        const attributeNameCandidatesInRow: string[] = [];
+        let isPkForCurrentAttribute = false;
+        let isFkForCurrentAttribute = false;
+        let attributeNameCandidate: string | null = null;
 
         for (const cellInfo of row) {
             const cleanedValue = stripHtmlTags(cellInfo.value);
             const upperCleanedValue = cleanedValue.toUpperCase();
 
             if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
-                if (upperCleanedValue.includes('PK')) isPkInRow = true;
-                if (upperCleanedValue.includes('FK')) isFkInRow = true;
-            } else { // This is a potential attribute name
-                attributeNameCandidatesInRow.push(cleanedValue);
+                if (upperCleanedValue.includes('PK')) isPkForCurrentAttribute = true;
+                if (upperCleanedValue.includes('FK')) isFkForCurrentAttribute = true;
+            } else {
+                // This is an attribute name. Assume one attribute name per logical row for simplicity based on XML structure.
+                attributeNameCandidate = cleanedValue;
+                break; // Stop after finding the first attribute name in the row
             }
         }
 
-        // Now, for each attribute name candidate found in this row, create an attribute
-        for (const attrCandidate of attributeNameCandidatesInRow) {
-            let isPk = isPkInRow;
-            let isFk = isFkInRow;
+        if (attributeNameCandidate) {
+            let isPk = isPkForCurrentAttribute;
+            let isFk = isFkForCurrentAttribute;
 
             // If no explicit key indicators were found in the row, try to infer
             if (!isPk && !isFk) {
-                isPk = fuzzyMatchAttribute(attrCandidate, expectedPks) !== null;
-                isFk = fuzzyMatchAttribute(attrCandidate, expectedFks) !== null;
-                console.log(`DEBUG:   No explicit indicator for '${attrCandidate}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
+                isPk = fuzzyMatchAttribute(attributeNameCandidate, expectedPks) !== null;
+                isFk = fuzzyMatchAttribute(attributeNameCandidate, expectedFks) !== null;
+                console.log(`DEBUG:   No explicit indicator for '${attributeNameCandidate}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
             }
 
             let typeStr = '';
@@ -535,14 +535,13 @@ function parseEntityAttributes(
             }
 
             entityData.attributes.push({
-                name: attrCandidate,
+                name: attributeNameCandidate,
                 type: typeStr,
                 is_pk: isPk,
                 is_fk: isFk
             });
-            console.log(`DEBUG: Pushed attribute: ${attrCandidate} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
-        }
-        if (attributeNameCandidatesInRow.length === 0) {
+            console.log(`DEBUG: Pushed attribute: ${attributeNameCandidate} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
+        } else {
             console.log(`DEBUG: No attribute name found for row: [${row.map(c => stripHtmlTags(c.value)).join(', ')}]`);
         }
     }
@@ -886,7 +885,7 @@ export function gradeErd(xmlContent: string): { report: string; score: number } 
         const reportContent = generateReport(entities, relationships, rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities, fieldMarks, keyMarks, relationshipMarks);
 
         console.log(reportContent);
-        console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (${percentage.toFixed(1)}%)`);
+        console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (%.toFixed(1)}%)`);
         console.log(`55`);
         console.log(`40`);
         console.log(`21`);
