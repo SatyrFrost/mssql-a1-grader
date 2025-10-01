@@ -8,20 +8,20 @@ const EXPECTED_ENTITY_NAMES_GROUND_TRUTH = new Set([
 
 // Define the full expected structure including all attributes
 const EXPECTED_STRUCTURE_FULL: { [key: string]: { pk: string[]; fk: string[]; allAttributes: string[] } } = {
-    "CUSTOMER": { "pk": ["CustomerID"], "fk": [], "allAttributes": ["CustomerID", "Name", "Address"] },
-    "PAYMENT": { "pk": ["PaymentInvoiceID"], "fk": ["CustomerID", "InvoiceID"], "allAttributes": ["PaymentInvoiceID", "CustomerID", "InvoiceID", "Amount"] },
+    "CUSTOMER": { "pk": ["CustomerID"], "fk": [], "allAttributes": ["CustomerID", "FirstName", "FamilyName", "Gender", "Address1", "Address2", "Address3"] },
+    "PAYMENT": { "pk": ["PaymentInvoiceID"], "fk": ["CustomerID", "InvoiceID"], "allAttributes": ["PaymentInvoiceID", "CustomerID", "InvoiceID", "PaymentDate", "Amount"] },
     "LU_COLOUR": { "pk": ["ColourID"], "fk": [], "allAttributes": ["ColourID", "ColourName"] },
-    "SALE": { "pk": ["InvoiceID"], "fk": ["CustomerID", "SalespersonID", "RegistrationID"], "allAttributes": ["InvoiceID", "CustomerID", "SalespersonID", "RegistrationID", "SaleDate"] },
-    "SALESPERSON": { "pk": ["SalespersonID"], "fk": [], "allAttributes": ["SalespersonID", "Name", "Phone"] },
-    "CAR": { "pk": ["RegistrationID"], "fk": ["ColourID"], "allAttributes": ["RegistrationID", "ColourID", "Make", "Model"] },
-    "ORDERS": { "pk": ["OrderID"], "fk": ["SupplierID", "SalespersonID"], "allAttributes": ["OrderID", "SupplierID", "SalespersonID", "OrderDate"] },
-    "ORDERSPRODUCT": { "pk": ["OrderID", "ProductID"], "fk": ["OrderID", "ProductID"], "allAttributes": ["OrderID", "ProductID", "Quantity"] },
-    "PRODUCT": { "pk": ["ProductID"], "fk": [], "allAttributes": ["ProductID", "Name", "Price"] },
-    "SUPPLIER": { "pk": ["SupplierID"], "fk": [], "allAttributes": ["SupplierID", "Name", "Contact"] }
+    "SALE": { "pk": ["InvoiceID"], "fk": ["CustomerID", "SalespersonID", "RegistrationID"], "allAttributes": ["InvoiceID", "SalesPersonID", "CustomerID", "RegistrationID", "DateSold", "Price"] },
+    "SALESPERSON": { "pk": ["SalespersonID"], "fk": [], "allAttributes": ["SalespersonID", "FirstName", "FamilyName", "StartDate", "Phone"] },
+    "CAR": { "pk": ["RegistrationID"], "fk": ["ColourID"], "allAttributes": ["RegistrationID", "ColourID", "Make", "Model", "CarYear", "Price", "Kilometres", "NumOwners"] },
+    "ORDERS": { "pk": ["OrderID"], "fk": ["SupplierID", "SalespersonID"], "allAttributes": ["OrderID", "SupplierID", "SalespersonID", "OrderDate", "Total"] },
+    "ORDERSPRODUCT": { "pk": ["OrderID", "ProductID"], "fk": ["OrderID", "ProductID"], "allAttributes": ["OrderID", "ProductID", "Quantity", "SubTotal"] },
+    "PRODUCT": { "pk": ["ProductID"], "fk": [], "allAttributes": ["ProductID", "Make", "Model", "ProductYear", "Price"] },
+    "SUPPLIER": { "pk": ["SupplierID"], "fk": [], "allAttributes": ["SupplierID", "SupplierName", "Address1", "Address2", "Address3", "ContactPerson", "Phone"] }
 };
 
 // Calculate EXPECTED_FIELDS dynamically from EXPECTED_STRUCTURE_FULL
-const EXPECTED_FIELDS = Object.values(EXPECTED_STRUCTURE_FULL).reduce((sum, s) => sum + s.allAttributes.length, 0); // Should be 34
+const EXPECTED_FIELDS = Object.values(EXPECTED_STRUCTURE_FULL).reduce((sum, s) => sum + s.allAttributes.length, 0); // Should be 54
 
 // Update EXPECTED_STRUCTURE to be used for PK/FK checks (it was already correct for PK/FKs)
 const EXPECTED_STRUCTURE: { [key: string]: { pk: string[]; fk: string[] } } = {
@@ -289,7 +289,59 @@ function isSimilarName(foundName: string): string | null {
             bestMatch = expected;
         }
     }
-    console.log(`DEBUG: fuzzyMatchAttribute: foundAttr='${foundName}' (normalized='${foundNormalized}'), expectedAttrs=[${expectedAttrs.map(normalizeName).join(', ')}], bestMatch='${bestMatch}' (distance: ${bestDistance})`);
+    return bestMatch;
+}
+
+function fuzzyMatchAttribute(foundAttr: string, expectedAttrs: string[]): string | null {
+    const cleanedFoundAttr = stripHtmlTags(foundAttr);
+    const foundNormalized = normalizeName(cleanedFoundAttr);
+
+    console.log(`DEBUG: fuzzyMatchAttribute: foundAttr='${foundAttr}' (normalized='${foundNormalized}'), expectedAttrs=[${expectedAttrs.map(normalizeName).join(', ')}]`);
+
+    for (const expected of expectedAttrs) {
+        const expectedNormalized = normalizeName(expected);
+        if (foundNormalized === expectedNormalized) {
+            console.log(`DEBUG: fuzzyMatchAttribute: Exact normalized match found: '${expected}'`);
+            return expected;
+        }
+    }
+
+    const commonVariations: { [key: string]: string } = {
+        'CUSTOMERID': 'CustomerID', 'CUSTOMER_ID': 'CustomerID', 'CUSTID': 'CustomerID',
+        'SALESPERSONID': 'SalespersonID', 'SALESPERSON_ID': 'SalespersonID',
+        'COLORID': 'ColourID', 'COLOUR_ID': 'ColourID',
+        'INVOICEID': 'InvoiceID', 'INVOICE_ID': 'InvoiceID',
+        'ORDERID': 'OrderID', 'ORDER_ID': 'OrderID',
+        'PRODUCTID': 'ProductID', 'PRODUCT_ID': 'ProductID',
+        'SUPPLIERID': 'SupplierID', 'SUPPLIER_ID': 'SupplierID',
+        'REGISTRATIONID': 'RegistrationID', 'REGISTRATION_ID': 'RegistrationID', 'REGID': 'RegistrationID',
+        'PAYMENTINVOICEID': 'PaymentInvoiceID', 'PAYMENT_INVOICE_ID': 'PaymentInvoiceID',
+    };
+
+    if (foundNormalized in commonVariations) {
+        const target = commonVariations[foundNormalized];
+        for (const expected of expectedAttrs) {
+            if (normalizeName(expected) === normalizeName(target)) {
+                console.log(`DEBUG: fuzzyMatchAttribute: Common variation match found: '${expected}'`);
+                return expected;
+            }
+        }
+    }
+
+    let bestMatch: string | null = null;
+    let bestDistance = Infinity;
+
+    for (const expected of expectedAttrs) {
+        const expectedNormalized = normalizeName(expected);
+        const distance = levenshteinDistance(foundNormalized, expectedNormalized);
+        const maxDistance = Math.max(3, Math.floor(expectedNormalized.length / 4));
+
+        if (distance < bestDistance && distance <= maxDistance) {
+            bestDistance = distance;
+            bestMatch = expected;
+        }
+    }
+    console.log(`DEBUG: fuzzyMatchAttribute: No exact/common match, best fuzzy match: '${bestMatch}' (distance: ${bestDistance})`);
     return bestMatch;
 }
 
