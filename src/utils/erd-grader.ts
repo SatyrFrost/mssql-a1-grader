@@ -289,59 +289,7 @@ function isSimilarName(foundName: string): string | null {
             bestMatch = expected;
         }
     }
-    return bestMatch;
-}
-
-function fuzzyMatchAttribute(foundAttr: string, expectedAttrs: string[]): string | null {
-    const cleanedFoundAttr = stripHtmlTags(foundAttr);
-    const foundNormalized = normalizeName(cleanedFoundAttr);
-
-    console.log(`DEBUG: fuzzyMatchAttribute: foundAttr='${foundAttr}' (normalized='${foundNormalized}'), expectedAttrs=[${expectedAttrs.map(normalizeName).join(', ')}]`);
-
-    for (const expected of expectedAttrs) {
-        const expectedNormalized = normalizeName(expected);
-        if (foundNormalized === expectedNormalized) {
-            console.log(`DEBUG: fuzzyMatchAttribute: Exact normalized match found: '${expected}'`);
-            return expected;
-        }
-    }
-
-    const commonVariations: { [key: string]: string } = {
-        'CUSTOMERID': 'CustomerID', 'CUSTOMER_ID': 'CustomerID', 'CUSTID': 'CustomerID',
-        'SALESPERSONID': 'SalespersonID', 'SALESPERSON_ID': 'SalespersonID',
-        'COLORID': 'ColourID', 'COLOUR_ID': 'ColourID',
-        'INVOICEID': 'InvoiceID', 'INVOICE_ID': 'InvoiceID',
-        'ORDERID': 'OrderID', 'ORDER_ID': 'OrderID',
-        'PRODUCTID': 'ProductID', 'PRODUCT_ID': 'ProductID',
-        'SUPPLIERID': 'SupplierID', 'SUPPLIER_ID': 'SupplierID',
-        'REGISTRATIONID': 'RegistrationID', 'REGISTRATION_ID': 'RegistrationID', 'REGID': 'RegistrationID',
-        'PAYMENTINVOICEID': 'PaymentInvoiceID', 'PAYMENT_INVOICE_ID': 'PaymentInvoiceID',
-    };
-
-    if (foundNormalized in commonVariations) {
-        const target = commonVariations[foundNormalized];
-        for (const expected of expectedAttrs) {
-            if (normalizeName(expected) === normalizeName(target)) {
-                console.log(`DEBUG: fuzzyMatchAttribute: Common variation match found: '${expected}'`);
-                return expected;
-            }
-        }
-    }
-
-    let bestMatch: string | null = null;
-    let bestDistance = Infinity;
-
-    for (const expected of expectedAttrs) {
-        const expectedNormalized = normalizeName(expected);
-        const distance = levenshteinDistance(foundNormalized, expectedNormalized);
-        const maxDistance = Math.max(3, Math.floor(expectedNormalized.length / 4));
-
-        if (distance < bestDistance && distance <= maxDistance) {
-            bestDistance = distance;
-            bestMatch = expected;
-        }
-    }
-    console.log(`DEBUG: fuzzyMatchAttribute: No exact/common match, best fuzzy match: '${bestMatch}' (distance: ${bestDistance})`);
+    console.log(`DEBUG: fuzzyMatchAttribute: foundAttr='${foundName}' (normalized='${foundNormalized}'), expectedAttrs=[${expectedAttrs.map(normalizeName).join(', ')}], bestMatch='${bestMatch}' (distance: ${bestDistance})`);
     return bestMatch;
 }
 
@@ -532,14 +480,23 @@ function parseEntityAttributes(
                 if (upperCleanedValue.includes('FK')) nextAttributeIsFk = true;
                 console.log(`DEBUG:       Identified as KEY INDICATOR. Updated flags: PK=${nextAttributeIsPk}, FK=${nextAttributeIsFk}`);
             } else {
+                // First, check if this attribute is expected in the ground truth for this entity
+                const matchedExpectedAttribute = fuzzyMatchAttribute(cleanedValue, EXPECTED_STRUCTURE_FULL[entityGtName].allAttributes);
+                if (!matchedExpectedAttribute) {
+                    console.log(`DEBUG:       Skipping attribute '${cleanedValue}' as it's not an expected attribute for entity '${entityData.name}'.`);
+                    nextAttributeIsPk = false; // Reset flags even if skipped
+                    nextAttributeIsFk = false;
+                    continue; // Skip to next cell in row
+                }
+
                 // This is an attribute name. Apply the flags that were set by the *immediately preceding* key indicator.
                 let isPk = nextAttributeIsPk;
                 let isFk = nextAttributeIsFk;
 
                 // If no explicit key indicators were found immediately before this attribute, try to infer
                 if (!isPk && !isFk) {
-                    isPk = fuzzyMatchAttribute(cleanedValue, expectedPks) !== null;
-                    isFk = fuzzyMatchAttribute(cleanedValue, expectedFks) !== null;
+                    isPk = fuzzyMatchAttribute(matchedExpectedAttribute, expectedPks) !== null; // Use matchedExpectedAttribute for inference
+                    isFk = fuzzyMatchAttribute(matchedExpectedAttribute, expectedFks) !== null; // Use matchedExpectedAttribute for inference
                     console.log(`DEBUG:       No explicit indicator for '${cleanedValue}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
                 } else {
                     console.log(`DEBUG:       Applying explicit flags for '${cleanedValue}'. PK=${isPk}, FK=${isFk}`);
@@ -555,12 +512,12 @@ function parseEntityAttributes(
                 }
 
                 entityData.attributes.push({
-                    name: cleanedValue,
+                    name: matchedExpectedAttribute, // Store the ground truth name
                     type: typeStr,
                     is_pk: isPk,
                     is_fk: isFk
                 });
-                console.log(`DEBUG: Pushed attribute: ${cleanedValue} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
+                console.log(`DEBUG: Pushed attribute: ${matchedExpectedAttribute} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
 
                 // Reset flags *after* processing this attribute, so they don't apply to subsequent attributes in the same row.
                 nextAttributeIsPk = false;
@@ -680,7 +637,7 @@ function parseErdElements(mxGraphModel: Element): { entities: { [id: string]: Pa
 // --- Scoring and Reporting Functions ---
 
 function calculateScore(entities: { [id: string]: ParsedEntity }, relationships: ParsedRelationship[]): ScoreDetails {
-    const MAX_RAW_SCORE = 116; // This will be adjusted based on the new EXPECTED_FIELDS and other counts
+    const MAX_RAW_SCORE_BASE = 40; // Base for relationships
     let currentScore = 0;
     const feedbackPoints: GradingFeedback = {
         Fields: [],
@@ -754,6 +711,8 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
         const sourceGt = rel.source_gt;
         const targetGt = rel.target_gt;
 
+        console.log(`DEBUG: Processing relationship: ${sourceGt} (${rel.start_card}) -> ${targetGt} (${rel.end_card})`); // New line
+
         const relKey = `${sourceGt}_${targetGt}`;
         const relKeyReverse = `${targetGt}_${sourceGt}`;
 
@@ -772,12 +731,16 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
             console.log(`DEBUG:   Relationship match found for ${relKey} (reversed: ${isReversed}).`);
             connectionMarks += 2;
             console.log(`DEBUG:     Connection marks: ${connectionMarks}`);
+            console.log(`DEBUG:     Raw expectedCard from ground truth: [${expectedCard[0]}, ${expectedCard[1]}]`); // Add this line
 
             const [expectedSourceCard, expectedTargetCard] = isReversed ? [expectedCard[1], expectedCard[0]] : [expectedCard[0], expectedCard[1]];
-            console.log(`DEBUG:     Parsed: (${rel.start_card}):(${rel.end_card}), Expected: (${expectedSourceCard}):(${expectedTargetCard})`);
+            console.log(`DEBUG:     Parsed: (${rel.start_card}):(${rel.end_card}), Expected (adjusted for direction): (${expectedSourceCard}):(${expectedTargetCard})`); // Clarify log
 
             const correctSource = rel.start_card === expectedSourceCard;
             const correctTarget = rel.end_card === expectedTargetCard;
+
+            console.log(`DEBUG:       Comparing Source: Parsed='${rel.start_card}', Expected='${expectedSourceCard}', Correct=${correctSource}`); // New line
+            console.log(`DEBUG:       Comparing Target: Parsed='${rel.end_card}', Expected='${expectedTargetCard}', Correct=${correctTarget}`); // New line
 
             if (correctSource) {
                 sourceCardinalityMarks += 1;
@@ -816,7 +779,7 @@ function calculateScore(entities: { [id: string]: ParsedEntity }, relationships:
     feedbackPoints.Relationship_Details = matchedRelationships;
 
     // Adjust MAX_RAW_SCORE based on the new EXPECTED_FIELDS
-    const newMaxRawScore = EXPECTED_FIELDS + totalExpectedPks + totalExpectedFks + 40; // 40 for relationships
+    const newMaxRawScore = EXPECTED_FIELDS + totalExpectedPks + totalExpectedFks + MAX_RAW_SCORE_BASE;
     
     const rawScore = currentScore;
     const scaledScore = (currentScore / newMaxRawScore) * 40;
