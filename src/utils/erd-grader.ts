@@ -289,6 +289,7 @@ function isSimilarName(foundName: string): string | null {
             bestMatch = expected;
         }
     }
+    console.log(`DEBUG: fuzzyMatchAttribute: No exact/common match, best fuzzy match: '${bestMatch}' (distance: ${bestDistance})`);
     return bestMatch;
 }
 
@@ -430,6 +431,49 @@ function identifyEntities(rootElement: Element): { [id: string]: ParsedEntity } 
     return entities;
 }
 
+// Helper to process and push an attribute with its collected key indicators
+function processAndPushAttribute(
+    entityData: ParsedEntity,
+    attributeCell: { id: string; value: string; y: number; x: number; style: string },
+    keyIndicators: { id: string; value: string; y: number; x: number; style: string }[],
+    expectedPks: string[],
+    expectedFks: string[]
+) {
+    let isPk = false;
+    let isFk = false;
+    const attributeName = stripHtmlTags(attributeCell.value);
+    const matchedExpectedAttribute = fuzzyMatchAttribute(attributeName, EXPECTED_STRUCTURE_FULL[entityData.ground_truth_name].allAttributes);
+
+    if (!matchedExpectedAttribute) {
+        console.log(`DEBUG:       Skipping attribute '${attributeName}' as it's not an expected attribute for entity '${entityData.name}'.`);
+        return;
+    }
+
+    for (const keyCell of keyIndicators) {
+        const upperKey = stripHtmlTags(keyCell.value).toUpperCase();
+        if (upperKey.includes('PK')) isPk = true;
+        if (upperKey.includes('FK')) isFk = true;
+    }
+
+    let typeStr = '';
+    if (isPk && isFk) {
+        typeStr = 'PK, FK';
+    } else if (isPk) {
+        typeStr = 'PK';
+    } else if (isFk) {
+        typeStr = 'FK';
+    }
+
+    entityData.attributes.push({
+        name: matchedExpectedAttribute,
+        type: typeStr,
+        is_pk: isPk,
+        is_fk: isFk
+    });
+    console.log(`DEBUG: Pushed attribute: ${matchedExpectedAttribute} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
+}
+
+
 // Helper to parse attributes for a single entity
 function parseEntityAttributes(
     entityId: string,
@@ -511,79 +555,30 @@ function parseEntityAttributes(
     for (const row of rows) {
         if (row.length < 1) continue;
 
-        row.sort((a, b) => a.x - b.x);
+        row.sort((a, b) => a.x - b.x); // Ensure left-to-right processing
 
-        let nextAttributeIsPk = false;
-        let nextAttributeIsFk = false;
-
-        console.log(`DEBUG:   Processing new row for ${entityData.name}. Initial flags: PK=${nextAttributeIsPk}, FK=${nextAttributeIsFk}`);
+        let attributeNameCell: typeof attributeCandidates[0] | null = null;
+        let keyIndicatorCells: typeof attributeCandidates = [];
 
         for (const cellInfo of row) {
-            const rawValue = cellInfo.value; // Keep raw value for debug
-            const cleanedValue = stripHtmlTags(rawValue);
+            const cleanedValue = stripHtmlTags(cellInfo.value);
             const upperCleanedValue = cleanedValue.toUpperCase();
 
-            console.log(`DEBUG:     Cell (raw): '${rawValue}' (ID: ${cellInfo.id})`);
-            console.log(`DEBUG:     Cell (cleaned): '${cleanedValue}' (ID: ${cellInfo.id})`);
-
             if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
-                // If it's a key indicator, set flags for the *next* attribute encountered in this row
-                if (upperCleanedValue.includes('PK')) nextAttributeIsPk = true;
-                if (upperCleanedValue.includes('FK')) nextAttributeIsFk = true;
-                console.log(`DEBUG:       Identified as KEY INDICATOR. Updated flags: PK=${nextAttributeIsPk}, FK=${nextAttributeIsFk}`);
+                keyIndicatorCells.push(cellInfo);
             } else {
-                // First, check if this attribute is expected in the ground truth for this entity
-                const matchedExpectedAttribute = fuzzyMatchAttribute(cleanedValue, EXPECTED_STRUCTURE_FULL[entityGtName].allAttributes);
-                if (!matchedExpectedAttribute) {
-                    console.log(`DEBUG:       Skipping attribute '${cleanedValue}' as it's not an expected attribute for entity '${entityData.name}'.`);
-                    nextAttributeIsPk = false; // Reset flags even if skipped
-                    nextAttributeIsFk = false;
-                    continue; // Skip to next cell in row
+                // This is an attribute name. If we already have an attributeNameCell,
+                // it means the previous one needs to be processed first.
+                if (attributeNameCell) {
+                    processAndPushAttribute(entityData, attributeNameCell, keyIndicatorCells, expectedPks, expectedFks);
+                    keyIndicatorCells = []; // Reset for the new attribute
                 }
-
-                // This is an attribute name. Apply the flags that were set by the *immediately preceding* key indicator.
-                let isPk = nextAttributeIsPk;
-                let isFk = nextAttributeIsFk;
-
-                // IMPORTANT: Removed the inference logic here. isPk and isFk will only be true if explicitly marked.
-                // if (!isPk && !isFk) {
-                //     isPk = fuzzyMatchAttribute(matchedExpectedAttribute, expectedPks) !== null;
-                //     isFk = fuzzyMatchAttribute(matchedExpectedAttribute, expectedFks) !== null;
-                //     console.log(`DEBUG:       No explicit indicator for '${cleanedValue}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
-                // } else {
-                //     console.log(`DEBUG:       Applying explicit flags for '${cleanedValue}'. PK=${isPk}, FK=${isFk}`);
-                // }
-                
-                // Re-added the explicit flag logging for clarity after removing inference
-                if (isPk || isFk) {
-                    console.log(`DEBUG:       Applying explicit flags for '${cleanedValue}'. PK=${isPk}, FK=${isFk}`);
-                } else {
-                    console.log(`DEBUG:       No explicit indicator for '${cleanedValue}'. Not inferring keys.`);
-                }
-
-
-                let typeStr = '';
-                if (isPk && isFk) {
-                    typeStr = 'PK, FK';
-                } else if (isPk) {
-                    typeStr = 'PK';
-                } else if (isFk) {
-                    typeStr = 'FK';
-                }
-
-                entityData.attributes.push({
-                    name: matchedExpectedAttribute, // Store the ground truth name
-                    type: typeStr,
-                    is_pk: isPk,
-                    is_fk: isFk
-                });
-                console.log(`DEBUG: Pushed attribute: ${matchedExpectedAttribute} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
-
-                // Reset flags *after* processing this attribute, so they don't apply to subsequent attributes in the same row.
-                nextAttributeIsPk = false;
-                nextAttributeIsFk = false;
-                console.log(`DEBUG:       Flags reset for next attribute. PK=${nextAttributeIsPk}, FK=${nextAttributeIsFk}`);
+                attributeNameCell = cellInfo;
             }
+        }
+        // Process the last attribute in the row
+        if (attributeNameCell) {
+            processAndPushAttribute(entityData, attributeNameCell, keyIndicatorCells, expectedPks, expectedFks);
         }
     }
 }
@@ -945,7 +940,7 @@ export function gradeErd(xmlContent: string): { report: string; score: number } 
         const reportContent = generateReport(entities, relationships, rawScore, scaledScore, percentage, MAX_RAW_SCORE, feedbackPoints, missingEntities, fieldMarks, keyMarks, relationshipMarks);
 
         console.log(reportContent);
-        console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (${percentage.toFixed(1)}%)`);
+        console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (%.toFixed(1)}%)`);
         console.log(`${fieldMarks}`); // Changed from EXPECTED_FIELDS
         console.log(`${relationshipMarks}`); // Changed from 40
         console.log(`${keyMarks}`); // Changed from 21
