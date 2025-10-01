@@ -423,11 +423,12 @@ function parseEntityAttributes(
     const expectedPks = EXPECTED_STRUCTURE[entityGtName]?.pk || [];
     const expectedFks = EXPECTED_STRUCTURE[entityGtName]?.fk || [];
 
-    const attributeCells: { id: string; value: string; y: number; x: number; style: string }[] = [];
+    const attributeCandidates: { id: string; value: string; y: number; x: number; style: string }[] = [];
     for (const cellId in allCells) {
         const cell = allCells[cellId];
         const parentOfCell = parentMap[cellId];
 
+        // Check if the cell is a child of the entity (direct or nested within tableRow)
         let isChildOfEntity = false;
         let currentParentId: string | undefined = parentOfCell;
         let depth = 0;
@@ -452,7 +453,7 @@ function parseEntityAttributes(
                 continue;
             }
 
-            attributeCells.push({
+            attributeCandidates.push({
                 id: cellId,
                 value: value,
                 y: yPos,
@@ -463,17 +464,17 @@ function parseEntityAttributes(
     }
 
     // Sort cells primarily by Y-coordinate, then by X-coordinate
-    attributeCells.sort((a, b) => {
+    attributeCandidates.sort((a, b) => {
         if (a.y !== b.y) return a.y - b.y;
         return a.x - b.x;
     });
 
-    const rows: typeof attributeCells[][] = [];
-    let currentRow: typeof attributeCells = [];
+    const rows: typeof attributeCandidates[][] = [];
+    let currentRow: typeof attributeCandidates = [];
     let lastY: number | null = null;
     const tolerance = 5; // Tolerance for grouping cells into the same row
 
-    for (const cellInfo of attributeCells) {
+    for (const cellInfo of attributeCandidates) {
         if (lastY === null || Math.abs(cellInfo.y - lastY) <= tolerance) {
             currentRow.push(cellInfo);
             lastY = cellInfo.y;
@@ -498,7 +499,7 @@ function parseEntityAttributes(
 
         let isPkInRow = false;
         let isFkInRow = false;
-        let attributeName: string | null = null;
+        const attributeNameCandidatesInRow: string[] = [];
 
         for (const cellInfo of row) {
             const cleanedValue = stripHtmlTags(cellInfo.value);
@@ -507,20 +508,21 @@ function parseEntityAttributes(
             if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
                 if (upperCleanedValue.includes('PK')) isPkInRow = true;
                 if (upperCleanedValue.includes('FK')) isFkInRow = true;
-            } else if (!attributeName) { // Take the first non-indicator as the attribute name
-                attributeName = cleanedValue;
+            } else { // This is a potential attribute name
+                attributeNameCandidatesInRow.push(cleanedValue);
             }
         }
 
-        if (attributeName) {
+        // Now, for each attribute name candidate found in this row, create an attribute
+        for (const attrCandidate of attributeNameCandidatesInRow) {
             let isPk = isPkInRow;
             let isFk = isFkInRow;
 
             // If no explicit key indicators were found in the row, try to infer
             if (!isPk && !isFk) {
-                isPk = fuzzyMatchAttribute(attributeName, expectedPks) !== null;
-                isFk = fuzzyMatchAttribute(attributeName, expectedFks) !== null;
-                console.log(`DEBUG:   No explicit indicator for '${attributeName}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
+                isPk = fuzzyMatchAttribute(attrCandidate, expectedPks) !== null;
+                isFk = fuzzyMatchAttribute(attrCandidate, expectedFks) !== null;
+                console.log(`DEBUG:   No explicit indicator for '${attrCandidate}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
             }
 
             let typeStr = '';
@@ -533,13 +535,14 @@ function parseEntityAttributes(
             }
 
             entityData.attributes.push({
-                name: attributeName,
+                name: attrCandidate,
                 type: typeStr,
                 is_pk: isPk,
                 is_fk: isFk
             });
-            console.log(`DEBUG: Pushed attribute: ${attributeName} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
-        } else {
+            console.log(`DEBUG: Pushed attribute: ${attrCandidate} (Type: ${typeStr}, is_pk: ${isPk}, is_fk: ${isFk}) to ${entityData.name}`);
+        }
+        if (attributeNameCandidatesInRow.length === 0) {
             console.log(`DEBUG: No attribute name found for row: [${row.map(c => stripHtmlTags(c.value)).join(', ')}]`);
         }
     }
