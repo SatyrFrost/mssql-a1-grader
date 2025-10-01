@@ -545,14 +545,22 @@ function parseEntityAttributes(
                 let isPk = nextAttributeIsPk;
                 let isFk = nextAttributeIsFk;
 
-                // If no explicit key indicators were found immediately before this attribute, try to infer
-                if (!isPk && !isFk) {
-                    isPk = fuzzyMatchAttribute(matchedExpectedAttribute, expectedPks) !== null; // Use matchedExpectedAttribute for inference
-                    isFk = fuzzyMatchAttribute(matchedExpectedAttribute, expectedFks) !== null; // Use matchedExpectedAttribute for inference
-                    console.log(`DEBUG:       No explicit indicator for '${cleanedValue}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
-                } else {
+                // IMPORTANT: Removed the inference logic here. isPk and isFk will only be true if explicitly marked.
+                // if (!isPk && !isFk) {
+                //     isPk = fuzzyMatchAttribute(matchedExpectedAttribute, expectedPks) !== null;
+                //     isFk = fuzzyMatchAttribute(matchedExpectedAttribute, expectedFks) !== null;
+                //     console.log(`DEBUG:       No explicit indicator for '${cleanedValue}'. Inferring -> isPk=${isPk}, isFk=${isFk}`);
+                // } else {
+                //     console.log(`DEBUG:       Applying explicit flags for '${cleanedValue}'. PK=${isPk}, FK=${isFk}`);
+                // }
+                
+                // Re-added the explicit flag logging for clarity after removing inference
+                if (isPk || isFk) {
                     console.log(`DEBUG:       Applying explicit flags for '${cleanedValue}'. PK=${isPk}, FK=${isFk}`);
+                } else {
+                    console.log(`DEBUG:       No explicit indicator for '${cleanedValue}'. Not inferring keys.`);
                 }
+
 
                 let typeStr = '';
                 if (isPk && isFk) {
