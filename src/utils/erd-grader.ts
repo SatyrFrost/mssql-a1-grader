@@ -510,7 +510,8 @@ function parseEntityAttributes(
             const yPos = parseFloat(geometry?.getAttribute('y') || '0');
             const xPos = parseFloat(geometry?.getAttribute('x') || '0');
 
-            // REMOVED: || !value to ensure key indicator cells are not skipped
+            // IMPORTANT: Do not skip cells with empty values here, as a user might intentionally clear a PK/FK label.
+            // The check for KEY_INDICATOR_VALUES.has(upperCleanedValue) will handle empty values correctly.
             if (style.includes('tableRow')) { // Only skip tableRow containers
                 continue;
             }
@@ -587,6 +588,71 @@ function parseEntityAttributes(
             processAndPushAttribute(entityData, attributeNameCell, keyIndicatorCells, expectedPks, expectedFks);
         }
     }
+}
+
+// Helper to identify relationships
+function identifyRelationships(
+    rootElement: Element,
+    entities: { [id: string]: ParsedEntity },
+    parentMap: { [id: string]: string }
+): ParsedRelationship[] {
+    const relationships: ParsedRelationship[] = [];
+    const seenRelationships = new Set<string>();
+
+    const findEntityOwner = (cellId: string): string | null => {
+        let currentId: string | undefined = cellId;
+        let depth = 0;
+        while (currentId && depth < 20) {
+            if (entities[currentId]) {
+                return currentId;
+            }
+            currentId = parentMap[currentId];
+            depth++;
+        }
+        return null;
+    };
+
+    rootElement.querySelectorAll("mxCell[edge='1']").forEach(cell => {
+        const style = cell.getAttribute('style') || '';
+        const sourceId = cell.getAttribute('source');
+        const targetId = cell.getAttribute('target');
+        const relName = stripHtmlTags(cell.getAttribute('value')?.trim() || '...'); // Strip HTML from relationship name
+
+        const sourceEntityId = sourceId ? findEntityOwner(sourceId) : null;
+        const targetEntityId = targetId ? findEntityOwner(targetId) : null;
+
+        if (sourceEntityId && targetEntityId) {
+            const sortedEntityIds = [sourceEntityId, targetEntityId].sort();
+            const relKey = `${sortedEntityIds[0]}-${sortedEntityIds[1]}`;
+
+            if (seenRelationships.has(relKey)) {
+                return;
+            }
+            seenRelationships.add(relKey);
+
+            const startCard = style.includes('startArrow=ERmandOne') ? '1' :
+                            style.includes('startArrow=ERzeroToMany') ? '0..N' :
+                            style.includes('startArrow=ERoneToMany') ? '1..N' :
+                            '?';
+            const endCard = style.includes('endArrow=ERmandOne') ? '1' :
+                          (style.includes('endArrow=ERzeroToMany') || style.includes('endArrow=ERoneToMany')) ? '0..N' :
+                          '?';
+            const cardinality = `(${startCard}):(${endCard})`;
+
+            relationships.push({
+                source: entities[sourceEntityId].name,
+                source_gt: entities[sourceEntityId].ground_truth_name,
+                target: entities[targetEntityId].name,
+                target_gt: entities[targetEntityId].ground_truth_name,
+                name: relName,
+                cardinality: cardinality,
+                start_card: startCard,
+                end_card: endCard
+            });
+            console.log(`DEBUG: Identified relationship: ${entities[sourceEntityId].name} -> ${entities[targetEntityId].name} (Card: ${cardinality})`);
+        }
+    });
+    return relationships;
 }
 
 // --- Main Parsing Function ---
