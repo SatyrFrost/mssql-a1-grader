@@ -900,9 +900,9 @@ Missing Tables: ${missingEntities.length > 0 ? missingEntities.sort().join(', ')
     report += `Scaled Score (out of 40): ${scaledScore.toFixed(2)}\n`;
     report += `Percentage: ${percentage.toFixed(1)}%\n`;
     report += `\n`;
-    report += `${EXPECTED_FIELDS}\n`;
-    report += `40\n`;
-    report += `21\n`;
+    report += `${fieldMarks}\n`; // Changed from EXPECTED_FIELDS
+    report += `${relationshipMarks}\n`; // Changed from 40
+    report += `${keyMarks}\n`; // Changed from 21
 
     return report;
 }
@@ -938,9 +938,9 @@ export function gradeErd(xmlContent: string): { report: string; score: number } 
 
         console.log(reportContent);
         console.log(`\nFinal Score: ${scaledScore.toFixed(2)}/40 (${percentage.toFixed(1)}%)`);
-        console.log(`${EXPECTED_FIELDS}`);
-        console.log(`40`);
-        console.log(`21`);
+        console.log(`${fieldMarks}`); // Changed from EXPECTED_FIELDS
+        console.log(`${relationshipMarks}`); // Changed from 40
+        console.log(`${keyMarks}`); // Changed from 21
         return { report: reportContent, score: scaledScore };
     } else {
         console.error("GRADING FAILED: The diagram file could not be parsed.");
