@@ -510,9 +510,8 @@ function parseEntityAttributes(
             const yPos = parseFloat(geometry?.getAttribute('y') || '0');
             const xPos = parseFloat(geometry?.getAttribute('x') || '0');
 
-            // IMPORTANT: Do not skip cells with empty values here, as a user might intentionally clear a PK/FK label.
-            // The check for KEY_INDICATOR_VALUES.has(upperCleanedValue) will handle empty values correctly.
-            if (style.includes('tableRow')) { // Only skip tableRow containers
+            // Only skip tableRow containers, allow empty values for potential key indicators
+            if (style.includes('tableRow')) {
                 continue;
             }
 
@@ -536,57 +535,32 @@ function parseEntityAttributes(
         return a.x - b.x;
     });
 
-    const rows: typeof attributeCandidates[][] = [];
-    let currentRow: typeof attributeCandidates = [];
-    let lastY: number | null = null;
-    const tolerance = 5;
+    // Refined logic to process attributes and their associated key indicators
+    let currentKeyIndicators: typeof attributeCandidates = [];
+    let lastValidAttributeCell: typeof attributeCandidates[0] | null = null;
 
     for (const cellInfo of attributeCandidates) {
-        if (lastY === null || Math.abs(cellInfo.y - lastY) <= tolerance) {
-            currentRow.push(cellInfo);
-            lastY = cellInfo.y;
-        } else {
-            if (currentRow.length > 0) {
-                rows.push(currentRow);
+        const cleanedValue = stripHtmlTags(cellInfo.value);
+        const upperCleanedValue = cleanedValue.toUpperCase();
+
+        if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
+            // This is a key indicator cell (e.g., "PK", "FK")
+            currentKeyIndicators.push(cellInfo);
+        } else if (cleanedValue.length > 0) {
+            // This is a non-empty, non-key-indicator cell, so it's an attribute name.
+            // Process the previous valid attribute (if any) with the keys collected so far.
+            if (lastValidAttributeCell) {
+                processAndPushAttribute(entityData, lastValidAttributeCell, currentKeyIndicators, expectedPks, expectedFks);
+                currentKeyIndicators = []; // Reset keys after processing an attribute
             }
-            currentRow = [cellInfo];
-            lastY = cellInfo.y;
+            lastValidAttributeCell = cellInfo; // Set the new attribute
         }
+        // If it's an empty cell and not a key indicator, we simply ignore it for attribute processing.
     }
-    if (currentRow.length > 0) {
-        rows.push(currentRow);
-    }
-    console.log(`DEBUG: Grouped rows for ${entityData.name}:`, rows.map((row, i) => `Row ${i}: [${row.map(c => stripHtmlTags(c.value)).join(', ')}]`));
 
-
-    for (const row of rows) {
-        if (row.length < 1) continue;
-
-        row.sort((a, b) => a.x - b.x); // Ensure left-to-right processing
-
-        let attributeNameCell: typeof attributeCandidates[0] | null = null;
-        let keyIndicatorCells: typeof attributeCandidates = [];
-
-        for (const cellInfo of row) {
-            const cleanedValue = stripHtmlTags(cellInfo.value);
-            const upperCleanedValue = cleanedValue.toUpperCase();
-
-            if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
-                keyIndicatorCells.push(cellInfo);
-            } else {
-                // This is an attribute name. If we already have an attributeNameCell,
-                // it means the previous one needs to be processed first.
-                if (attributeNameCell) {
-                    processAndPushAttribute(entityData, attributeNameCell, keyIndicatorCells, expectedPks, expectedFks);
-                    keyIndicatorCells = []; // Reset for the new attribute
-                }
-                attributeNameCell = cellInfo;
-            }
-        }
-        // Process the last attribute in the row
-        if (attributeNameCell) {
-            processAndPushAttribute(entityData, attributeNameCell, keyIndicatorCells, expectedPks, expectedFks);
-        }
+    // Process the very last attribute if there's one pending after the loop finishes
+    if (lastValidAttributeCell) {
+        processAndPushAttribute(entityData, lastValidAttributeCell, currentKeyIndicators, expectedPks, expectedFks);
     }
 }
 
