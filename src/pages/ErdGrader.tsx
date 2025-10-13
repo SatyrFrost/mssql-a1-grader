@@ -68,7 +68,7 @@ const ErdGrader = () => {
               <Input
                 id="erd-file"
                 type="file"
-                accept=".xml"
+                accept=".xml,.drawio"
                 onChange={handleFileChange}
                 ref={fileInputRef}
                 className="sr-only" // Visually hide the input
