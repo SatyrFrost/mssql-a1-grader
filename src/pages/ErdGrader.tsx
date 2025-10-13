@@ -59,7 +59,7 @@ const ErdGrader = () => {
         </CardHeader>
         <CardContent>
           <p className="text-center text-gray-600 mb-6">
-            Upload your `draw.io` XML file for automatic grading of Part 1: ERD.
+            Upload your 'draw.io' XML file (.xml or .drawio) for automatic grading of Part 1: ERD.
           </p>
           <div className="grid w-full max-w-sm items-center gap-1.5 mx-auto">
             <Label htmlFor="erd-file">ERD XML File</Label>
