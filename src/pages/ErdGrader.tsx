@@ -26,7 +26,7 @@ const ErdGrader = () => {
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      showError("Please select an XML file to upload.");
+      showError("Please select an XML or Draw.io file to upload.");
       return;
     }
 
@@ -68,7 +68,7 @@ const ErdGrader = () => {
               <Input
                 id="erd-file"
                 type="file"
-                accept=".xml"
+                accept=".xml,.drawio"
                 onChange={handleFileChange}
                 ref={fileInputRef}
                 className="sr-only" // Visually hide the input
