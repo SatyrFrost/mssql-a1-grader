@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ const ErdGrader = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [report, setReport] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for the hidden file input
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -46,6 +47,10 @@ const ErdGrader = () => {
     }
   };
 
+  const handleButtonClick = () => {
+    fileInputRef.current?.click(); // Trigger the hidden file input click
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <Card className="mb-6">
@@ -58,13 +63,25 @@ const ErdGrader = () => {
           </p>
           <div className="grid w-full max-w-sm items-center gap-1.5 mx-auto">
             <Label htmlFor="erd-file">ERD XML File</Label>
-            <Input
-              id="erd-file"
-              type="file"
-              accept=".xml"
-              onChange={handleFileChange}
-              className="mb-4"
-            />
+            <div className="flex items-center space-x-2 mb-4">
+              {/* Hidden native file input */}
+              <Input
+                id="erd-file"
+                type="file"
+                accept=".xml"
+                onChange={handleFileChange}
+                ref={fileInputRef}
+                className="sr-only" // Visually hide the input
+              />
+              {/* Custom button to trigger file input */}
+              <Button onClick={handleButtonClick} type="button">
+                Choose File
+              </Button>
+              {/* Display selected file name */}
+              <span className="text-sm text-gray-500 truncate">
+                {selectedFile ? selectedFile.name : "No file chosen"}
+              </span>
+            </div>
             <Button onClick={handleUpload} disabled={!selectedFile || isLoading}>
               {isLoading ? "Processing..." : "Upload and Grade"}
             </Button>
