@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRightIcon } from 'lucide-react';
+import { ArrowRightIcon, HelpCircleIcon } from 'lucide-react'; // Import HelpCircleIcon
 import { cn } from '@/lib/utils'; // Import cn for conditional class merging
 
 const HomePage = () => {
@@ -60,6 +60,19 @@ const HomePage = () => {
       <p className="text-center text-lg text-gray-600 dark:text-gray-400 mb-12">
         Select an application to get started. Teacher-specific tools are available upon login.
       </p>
+
+      {isAuthenticated && (
+        <div className="text-center mb-8">
+          <a
+            href="/Help.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors duration-200"
+          >
+            <HelpCircleIcon className="h-4 w-4 mr-1" /> View Help File
+          </a>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {appLinks.map((app, index) => (
