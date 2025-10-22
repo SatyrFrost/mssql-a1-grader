@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
-import { MenuIcon, LogOut, LogIn } from 'lucide-react';
+import { MenuIcon, LogOut, LogIn, HomeIcon } from 'lucide-react'; // Import HomeIcon
 
 export function Navbar() {
   const { isAuthenticated, logout } = useAuth();
@@ -25,6 +25,9 @@ export function Navbar() {
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-4">
+          <Link to="/" className="text-sm font-medium hover:underline"> {/* Home link added */}
+            Home
+          </Link>
           {isAuthenticated && (
             <Link to="/erd-grader" className="text-sm font-medium hover:underline">
               ERD Grader
@@ -80,6 +83,11 @@ export function Navbar() {
           </SheetTrigger>
           <SheetContent side="right">
             <nav className="flex flex-col gap-4 py-6">
+              <SheetClose asChild>
+                <Link to="/" className="text-lg font-semibold"> {/* Home link added */}
+                  <HomeIcon className="h-5 w-5 mr-2" /> Home
+                </Link>
+              </SheetClose>
               <SheetClose asChild>
                 <Link to="/" className="text-lg font-semibold">
                   App Portal
