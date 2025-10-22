@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRightIcon, HelpCircleIcon } from 'lucide-react'; // Import HelpCircleIcon
+import { ArrowRightIcon } from 'lucide-react'; // Removed HelpCircleIcon
 import { cn } from '@/lib/utils'; // Import cn for conditional class merging
 
 const HomePage = () => {
@@ -55,24 +55,13 @@ const HomePage = () => {
   ];
 
   return (
-    <div className="container mx-auto p-4 py-12 min-h-[calc(100vh-4rem)]">
-      <h1 className="text-4xl font-bold text-center mb-10 text-gray-900 dark:text-gray-50">Welcome to the App Portal</h1>
-      <p className="text-center text-lg text-gray-600 dark:text-gray-400 mb-12">
+    <div className="container mx-auto p-4 py-8 min-h-[calc(100vh-4rem)]"> {/* Reduced py-12 to py-8 */}
+      <h1 className="text-4xl font-bold text-center mb-8 text-gray-900 dark:text-gray-50">Welcome to the App Portal</h1> {/* Reduced mb-10 to mb-8 */}
+      <p className="text-center text-lg text-gray-600 dark:text-gray-400 mb-8"> {/* Reduced mb-12 to mb-8 */}
         Select an application to get started. Teacher-specific tools are available upon login.
       </p>
 
-      {isAuthenticated && (
-        <div className="text-center mb-8">
-          <a
-            href="/Help.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors duration-200"
-          >
-            <HelpCircleIcon className="h-4 w-4 mr-1" /> View Help File
-          </a>
-        </div>
-      )}
+      {/* Removed the conditional help link from here */}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {appLinks.map((app, index) => (
@@ -91,7 +80,7 @@ const HomePage = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0 flex-grow">
-                <p className="mb-6 text-base min-h-[3rem]"> {/* Added min-h-[3rem] here */}
+                <p className="mb-6 text-base min-h-[3rem]">
                   {app.description}
                 </p>
                 {app.external ? (
