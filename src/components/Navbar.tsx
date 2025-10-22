@@ -13,20 +13,20 @@ export function Navbar() {
 
   const handleLogout = () => {
     logout();
-    navigate('/'); // Redirect to home or login page after logout
+    navigate('/'); // Redirect to home page after successful logout
   };
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background">
       <div className="container flex h-16 items-center justify-between">
         <Link to="/" className="text-lg font-bold">
-          ERD Grader
+          App Portal
         </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-4">
           {isAuthenticated && (
-            <Link to="/" className="text-sm font-medium hover:underline">
+            <Link to="/erd-grader" className="text-sm font-medium hover:underline">
               ERD Grader
             </Link>
           )}
@@ -80,9 +80,14 @@ export function Navbar() {
           </SheetTrigger>
           <SheetContent side="right">
             <nav className="flex flex-col gap-4 py-6">
+              <SheetClose asChild>
+                <Link to="/" className="text-lg font-semibold">
+                  App Portal
+                </Link>
+              </SheetClose>
               {isAuthenticated && (
                 <SheetClose asChild>
-                  <Link to="/" className="text-lg font-semibold">
+                  <Link to="/erd-grader" className="text-lg font-semibold">
                     ERD Grader
                   </Link>
                 </SheetClose>
