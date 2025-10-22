@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
-import { MenuIcon, LogOut, LogIn, HomeIcon, HelpCircleIcon } from 'lucide-react'; // Import HelpCircleIcon
+import { MenuIcon, LogOut, LogIn, HomeIcon } from 'lucide-react'; // Removed HelpCircleIcon
 
 export function Navbar() {
   const { isAuthenticated, logout } = useAuth();
@@ -58,14 +58,6 @@ export function Navbar() {
                 className="text-sm font-medium hover:underline"
               >
                 SQL Grader
-              </a>
-              <a
-                href="/Help.html"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium hover:underline"
-              >
-                Help
               </a>
               <Button variant="ghost" onClick={handleLogout} className="text-sm font-medium">
                 <LogOut className="h-4 w-4 mr-2" /> Logout
@@ -138,16 +130,6 @@ export function Navbar() {
                       className="text-lg font-semibold"
                     >
                       SQL Grader
-                    </a>
-                  </SheetClose>
-                  <SheetClose asChild>
-                    <a
-                      href="/Help.html"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-lg font-semibold"
-                    >
-                      <HelpCircleIcon className="h-5 w-5 mr-2" /> Help
                     </a>
                   </SheetClose>
                   <SheetClose asChild>
