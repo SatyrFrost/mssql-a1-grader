@@ -40,9 +40,14 @@ export function Navbar() {
           </a>
           {isAuthenticated && (
             <>
-              <Link to="/teacher-grader" className="text-sm font-medium hover:underline">
+              <a
+                href="https://assignmentoneddjinhua.great-site.net/teacher-grader"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium hover:underline"
+              >
                 DD Teacher Grading
-              </Link>
+              </a>
               <a
                 href="https://assignmentonejinhuapartthreefour.great-site.net"
                 target="_blank"
@@ -95,9 +100,14 @@ export function Navbar() {
               {isAuthenticated && (
                 <>
                   <SheetClose asChild>
-                    <Link to="/teacher-grader" className="text-lg font-semibold">
+                    <a
+                      href="https://assignmentoneddjinhua.great-site.net/teacher-grader"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-lg font-semibold"
+                    >
                       DD Teacher Grading
-                    </Link>
+                    </a>
                   </SheetClose>
                   <SheetClose asChild>
                     <a
