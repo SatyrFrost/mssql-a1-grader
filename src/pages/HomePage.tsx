@@ -78,7 +78,7 @@ const HomePage = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0 flex-grow">
-                <p className="mb-6 text-base">
+                <p className="mb-6 text-base min-h-[3rem]"> {/* Added min-h-[3rem] here */}
                   {app.description}
                 </p>
                 {app.external ? (
