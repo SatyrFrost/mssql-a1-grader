@@ -518,39 +518,106 @@ function parseEntityAttributes(
     // Sort tableRows by their y-position
     tableRows.sort((a, b) => a.y - b.y);
 
-    // For each tableRow, collect its direct children (attributes and keys)
-    for (const row of tableRows) {
-        const rowCells: { id: string; value: string; x: number; style: string }[] = [];
-        for (const cellId in allCells) {
-            const cell = allCells[cellId];
-            if (parentMap[cellId] === row.id) { // Direct child of the current row
-                const value = cell.getAttribute('value')?.trim() || '';
-                const style = cell.getAttribute('style') || '';
-                const geometry = cell.querySelector('mxGeometry');
-                const xPos = parseFloat(geometry?.getAttribute('x') || '0');
-                rowCells.push({ id: cellId, value: value, x: xPos, style: style });
+    if (tableRows.length > 0) {
+        // Strategy 1: Explicit tableRows container format (e.g. Assignment_1_ERD_DRAWIO_2025B.xml)
+        for (const row of tableRows) {
+            const rowCells: { id: string; value: string; x: number; style: string }[] = [];
+            for (const cellId in allCells) {
+                const cell = allCells[cellId];
+                if (parentMap[cellId] === row.id) { // Direct child of the current row
+                    const value = cell.getAttribute('value')?.trim() || '';
+                    const style = cell.getAttribute('style') || '';
+                    const geometry = cell.querySelector('mxGeometry');
+                    const xPos = parseFloat(geometry?.getAttribute('x') || '0');
+                    rowCells.push({ id: cellId, value: value, x: xPos, style: style });
+                }
+            }
+            // Sort cells within the row by their x-position
+            rowCells.sort((a, b) => a.x - b.x);
+            row.cells = rowCells;
+        }
+
+        // Now process the collected rows and their cells
+        for (const row of tableRows) {
+            let currentKeyIndicators: { id: string; value: string; x: number; style: string }[] = []; // Reset for each row
+            for (const cellInfo of row.cells) {
+                const cleanedValue = stripHtmlTags(cellInfo.value);
+                const upperCleanedValue = cleanedValue.toUpperCase();
+
+                if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
+                    currentKeyIndicators.push(cellInfo);
+                } else if (cleanedValue.length > 0) {
+                    // This is an attribute name
+                    processAndPushAttribute(entityData, cellInfo, currentKeyIndicators, expectedPks, expectedFks);
+                    currentKeyIndicators = []; // Reset keys after processing an attribute
+                }
+                // Empty cells that are not key indicators are ignored.
             }
         }
-        // Sort cells within the row by their x-position
-        rowCells.sort((a, b) => a.x - b.x);
-        row.cells = rowCells;
-    }
+    } else {
+        // Strategy 2: Direct entity children format (e.g. student.drawio / swimlane items grouped by Y-coordinate)
+        const directCells: { id: string; value: string; x: number; y: number; style: string }[] = [];
 
-    // Now process the collected rows and their cells
-    for (const row of tableRows) {
-        let currentKeyIndicators: { id: string; value: string; x: number; style: string }[] = []; // Reset for each row
-        for (const cellInfo of row.cells) {
-            const cleanedValue = stripHtmlTags(cellInfo.value);
-            const upperCleanedValue = cleanedValue.toUpperCase();
+        for (const cellId in allCells) {
+            const cell = allCells[cellId];
+            if (parentMap[cellId] === entityId) {
+                const isEdge = cell.getAttribute('edge') === '1' || cell.getAttribute('style')?.includes('edge=1');
+                if (isEdge) continue;
 
-            if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
-                currentKeyIndicators.push(cellInfo);
-            } else if (cleanedValue.length > 0) {
-                // This is an attribute name
-                processAndPushAttribute(entityData, cellInfo, currentKeyIndicators, expectedPks, expectedFks);
-                currentKeyIndicators = []; // Reset keys after processing an attribute
+                const geometry = cell.querySelector('mxGeometry');
+                if (!geometry) continue;
+
+                const yPos = parseFloat(geometry.getAttribute('y') || '0');
+                const xPos = parseFloat(geometry.getAttribute('x') || '0');
+                const value = cell.getAttribute('value')?.trim() || '';
+                const style = cell.getAttribute('style') || '';
+
+                // Avoid re-processing the entity container header if it happens to be a child cell
+                const cleaned = stripHtmlTags(value);
+                if (cleaned.toUpperCase() === entityData.name.toUpperCase() && yPos <= 0) {
+                    continue;
+                }
+
+                directCells.push({
+                    id: cellId,
+                    value: value,
+                    x: xPos,
+                    y: yPos,
+                    style: style
+                });
             }
-            // Empty cells that are not key indicators are ignored.
+        }
+
+        // Group into rows based on Y-coordinate proximity (within 5px tolerance)
+        const rows: { y: number; cells: { id: string; value: string; x: number; y: number; style: string }[] }[] = [];
+        for (const cellInfo of directCells) {
+            let row = rows.find(r => Math.abs(r.y - cellInfo.y) <= 5);
+            if (!row) {
+                row = { y: cellInfo.y, cells: [] };
+                rows.push(row);
+            }
+            row.cells.push(cellInfo);
+        }
+
+        // Sort rows top-to-bottom
+        rows.sort((a, b) => a.y - b.y);
+
+        // Process each row left-to-right
+        for (const row of rows) {
+            row.cells.sort((a, b) => a.x - b.x);
+
+            let currentKeyIndicators: { id: string; value: string; x: number; y: number; style: string }[] = [];
+            for (const cellInfo of row.cells) {
+                const cleanedValue = stripHtmlTags(cellInfo.value);
+                const upperCleanedValue = cleanedValue.toUpperCase();
+
+                if (KEY_INDICATOR_VALUES.has(upperCleanedValue)) {
+                    currentKeyIndicators.push(cellInfo);
+                } else if (cleanedValue.length > 0) {
+                    processAndPushAttribute(entityData, cellInfo, currentKeyIndicators, expectedPks, expectedFks);
+                    currentKeyIndicators = [];
+                }
+            }
         }
     }
 }
