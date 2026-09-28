@@ -5,7 +5,7 @@ import { showError } from '@/utils/toast';
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  login: (password: string) => void;
+  login: (password: string) => boolean;
   logout: () => void;
 }
 

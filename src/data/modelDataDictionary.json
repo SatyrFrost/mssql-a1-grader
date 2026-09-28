@@ -1,0 +1,769 @@
+{
+  "tables": [
+    {
+      "tableName": "CAR",
+      "columns": [
+        {
+          "columnName": "RegistrationID",
+          "dataType": "VARCHAR",
+          "size": 7,
+          "isPrimaryKey": true,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Registration Number of Car"
+        },
+        {
+          "columnName": "Make",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Make of Car"
+        },
+        {
+          "columnName": "Model",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Model of Car"
+        },
+        {
+          "columnName": "CarYear",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Year Car was made"
+        },
+        {
+          "columnName": "NumOwners",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "Yes",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "How many people have owner Car"
+        },
+        {
+          "columnName": "Price",
+          "dataType": "MONEY",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Price of Car"
+        },
+        {
+          "columnName": "Kilometres",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Number of kilometres Car has driven"
+        },
+        {
+          "columnName": "ColourID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "LU_COLOUR",
+          "referencesColumn": "ColourID",
+          "columnDescription": "Colour ID of Car from LU_Colour table"
+        }
+      ]
+    },
+    {
+      "tableName": "CUSTOMER",
+      "columns": [
+        {
+          "columnName": "CustomerID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": true,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Customer ID"
+        },
+        {
+          "columnName": "FirstName",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "First Name of Customer"
+        },
+        {
+          "columnName": "FamilyName",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Family Name of Customer"
+        },
+        {
+          "columnName": "Gender",
+          "dataType": "VARCHAR",
+          "size": 1,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "Yes",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Gender of Customer"
+        },
+        {
+          "columnName": "Address1",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Address line 1 of Customer"
+        },
+        {
+          "columnName": "Address2",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Address line 2 of Customer"
+        },
+        {
+          "columnName": "Address3",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "Yes",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Address line 3of Customer"
+        },
+        {
+          "columnName": "Phone",
+          "dataType": "VARCHAR",
+          "size": 15,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Phone number of Customer"
+        }
+      ]
+    },
+    {
+      "tableName": "LU_COLOUR",
+      "columns": [
+        {
+          "columnName": "ColourID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": true,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Colour ID"
+        },
+        {
+          "columnName": "ColourName",
+          "dataType": "VARCHAR",
+          "size": 15,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Name of Colour"
+        }
+      ]
+    },
+    {
+      "tableName": "ORDERS",
+      "columns": [
+        {
+          "columnName": "OrderID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": true,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Order ID"
+        },
+        {
+          "columnName": "OrderDate",
+          "dataType": "DATETIME",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Date of Order"
+        },
+        {
+          "columnName": "Total",
+          "dataType": "MONEY",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "Yes",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Total cost of Order"
+        },
+        {
+          "columnName": "SupplierID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "SUPPLIER",
+          "referencesColumn": "SupplierID",
+          "columnDescription": "Supplier ID from Supplier table"
+        },
+        {
+          "columnName": "SalespersonID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "SALESPERSON",
+          "referencesColumn": "SalespersonID",
+          "columnDescription": "Salesperson ID from Salesperson table"
+        }
+      ]
+    },
+    {
+      "tableName": "ORDERSPRODUCT",
+      "columns": [
+        {
+          "columnName": "OrderID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "ORDERS",
+          "referencesColumn": "OrderID",
+          "columnDescription": "Order ID from Orders table"
+        },
+        {
+          "columnName": "ProductID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "PRODUCT",
+          "referencesColumn": "ProductID",
+          "columnDescription": "Product ID from Product table"
+        },
+        {
+          "columnName": "Quantity",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": "1",
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Number of Products to order"
+        },
+        {
+          "columnName": "SubTotal",
+          "dataType": "MONEY",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "Yes",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Quantity * Price from Products table"
+        }
+      ]
+    },
+    {
+      "tableName": "PAYMENT",
+      "columns": [
+        {
+          "columnName": "PaymentInvoiceID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": true,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Payment Invoice ID"
+        },
+        {
+          "columnName": "PaymentDate",
+          "dataType": "DATETIME",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Date of Payment"
+        },
+        {
+          "columnName": "Amount",
+          "dataType": "MONEY",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Amount of Payment"
+        },
+        {
+          "columnName": "CustomerID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "CUSTOMER",
+          "referencesColumn": "CustomerID",
+          "columnDescription": "Customer ID from Customer table"
+        },
+        {
+          "columnName": "InvoiceID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "SALE",
+          "referencesColumn": "InvoiceID",
+          "columnDescription": "Invoice ID from Sale table"
+        }
+      ]
+    },
+    {
+      "tableName": "PRODUCT",
+      "columns": [
+        {
+          "columnName": "ProductID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": true,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Product ID"
+        },
+        {
+          "columnName": "Make",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Make of Product"
+        },
+        {
+          "columnName": "Model",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Model of Product"
+        },
+        {
+          "columnName": "ProductYear",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Year Product was made"
+        },
+        {
+          "columnName": "Price",
+          "dataType": "MONEY",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Price of Product"
+        }
+      ]
+    },
+    {
+      "tableName": "SALE",
+      "columns": [
+        {
+          "columnName": "InvoiceID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": true,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Invoice ID"
+        },
+        {
+          "columnName": "DateSold",
+          "dataType": "DATETIME",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Date of Sale"
+        },
+        {
+          "columnName": "Price",
+          "dataType": "MONEY",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Price of Sale"
+        },
+        {
+          "columnName": "SalespersonID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "SALESPERSON",
+          "referencesColumn": "SalespersonID",
+          "columnDescription": "Salesperson ID from Salesperson table"
+        },
+        {
+          "columnName": "CustomerID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "CUSTOMER",
+          "referencesColumn": "CustomerID",
+          "columnDescription": "Customer ID from Customer table"
+        },
+        {
+          "columnName": "RegistrationID",
+          "dataType": "VARCHAR",
+          "size": 7,
+          "isPrimaryKey": false,
+          "isForeignKey": true,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": "CAR",
+          "referencesColumn": "RegistrationID",
+          "columnDescription": "Registration ID from Car table"
+        }
+      ]
+    },
+    {
+      "tableName": "SALESPERSON",
+      "columns": [
+        {
+          "columnName": "SalespersonID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": true,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Salesperson ID"
+        },
+        {
+          "columnName": "FirstName",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "First Name of Salesperson"
+        },
+        {
+          "columnName": "FamilyName",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Family Name of Salesperson"
+        },
+        {
+          "columnName": "StartDate",
+          "dataType": "DATETIME",
+          "size": null,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Start Date of Salesperson"
+        },
+        {
+          "columnName": "Phone",
+          "dataType": "VARCHAR",
+          "size": 10,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Phone number of Salesperson"
+        }
+      ]
+    },
+    {
+      "tableName": "SUPPLIER",
+      "columns": [
+        {
+          "columnName": "SupplierID",
+          "dataType": "INT",
+          "size": null,
+          "isPrimaryKey": true,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": true,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Supplier ID"
+        },
+        {
+          "columnName": "SupplierName",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Name of Supplier company"
+        },
+        {
+          "columnName": "Address1",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Address line 1 of Supplier"
+        },
+        {
+          "columnName": "Address2",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Address line 2 of Supplier"
+        },
+        {
+          "columnName": "Address3",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "Yes",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Address line 3of Supplier"
+        },
+        {
+          "columnName": "ContactPerson",
+          "dataType": "VARCHAR",
+          "size": 50,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Contact person of Supplier"
+        },
+        {
+          "columnName": "Phone",
+          "dataType": "VARCHAR",
+          "size": 10,
+          "isPrimaryKey": false,
+          "isForeignKey": false,
+          "isOptional": "No",
+          "isAuto": false,
+          "defaultValue": null,
+          "referencesTable": null,
+          "referencesColumn": null,
+          "columnDescription": "Phone number of Supplier"
+        }
+      ]
+    }
+  ]
+}

@@ -434,8 +434,8 @@ function identifyEntities(rootElement: Element): { [id: string]: ParsedEntity } 
 // Helper to process and push an attribute with its collected key indicators
 function processAndPushAttribute(
     entityData: ParsedEntity,
-    attributeCell: { id: string; value: string; y: number; x: number; style: string },
-    keyIndicators: { id: string; value: string; y: number; x: number; style: string }[],
+    attributeCell: { id: string; value: string; y?: number; x: number; style: string },
+    keyIndicators: { id: string; value: string; y?: number; x: number; style: string }[],
     expectedPks: string[],
     expectedFks: string[]
 ) {
