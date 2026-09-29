@@ -153,7 +153,10 @@ const TeacherGrader = () => {
               return;
             }
 
-            if (studentColumn.dataType === refColumn.dataType) {
+            const studentDataType = (studentColumn.dataType || "").trim().toUpperCase();
+            const refDataType = (refColumn.dataType || "").trim().toUpperCase();
+
+            if (studentDataType === refDataType) {
               detailedChecks.push(`      ✅ Data type for "${refColumn.columnName}" matches.`);
               formatsScore += 1;
             } else {
@@ -161,27 +164,32 @@ const TeacherGrader = () => {
             }
 
             let sizeScoreAwarded = false;
-            const isRefAutoIncrementPK = refColumn.isPrimaryKey && refColumn.isAuto && getEffectiveSize(refColumn.size) === null;
+            const studentIsAuto = Boolean(studentColumn.isAuto);
+            const refIsAuto = Boolean(refColumn.isAuto);
+            const studentIsPK = Boolean(studentColumn.isPrimaryKey);
+            const refIsPK = Boolean(refColumn.isPrimaryKey);
+
+            const isRefAutoIncrementPK = refIsPK && refIsAuto && getEffectiveSize(refColumn.size) === null;
             const effectiveRefSize = getEffectiveSize(refColumn.size);
             const effectiveStudentSize = getEffectiveSize(studentColumn.size);
 
             if (effectiveRefSize !== null) {
-              if (refColumn.dataType === "VARCHAR") {
-                if (effectiveStudentSize !== null && effectiveStudentSize > 0 && studentColumn.isAuto === refColumn.isAuto) {
+              if (refDataType === "VARCHAR") {
+                if (effectiveStudentSize !== null && effectiveStudentSize > 0 && studentIsAuto === refIsAuto) {
                   sizeScoreAwarded = true;
                 }
               } else {
-                if (effectiveStudentSize === effectiveRefSize && studentColumn.isAuto === refColumn.isAuto) {
+                if (effectiveStudentSize === effectiveRefSize && studentIsAuto === refIsAuto) {
                   sizeScoreAwarded = true;
                 }
               }
             } else {
               if (isRefAutoIncrementPK) {
-                if (studentColumn.isPrimaryKey && studentColumn.isAuto && effectiveStudentSize === null) {
+                if (studentIsPK && studentIsAuto && effectiveStudentSize === null) {
                   sizeScoreAwarded = true;
                 }
               } else {
-                if (effectiveStudentSize === null && studentColumn.isAuto === refColumn.isAuto) {
+                if (effectiveStudentSize === null && studentIsAuto === refIsAuto) {
                   sizeScoreAwarded = true;
                 }
               }
@@ -194,24 +202,29 @@ const TeacherGrader = () => {
               detailedChecks.push(`      ❌ Size/Auto-increment for "${refColumn.columnName}" mismatch. Expected size "${refColumn.size}" and auto-increment "${refColumn.isAuto}", got size "${studentColumn.size}" and auto-increment "${studentColumn.isAuto}".`);
             }
 
-            if (refColumn.isPrimaryKey && studentColumn.isPrimaryKey) {
+            const studentIsFK = Boolean(studentColumn.isForeignKey);
+            const refIsFK = Boolean(refColumn.isForeignKey);
+
+            if (refIsPK && studentIsPK) {
               keysScore += 1;
               detailedChecks.push(`      ✅ Primary Key status for "${refColumn.columnName}" matches.`);
-            } else if (refColumn.isPrimaryKey && !studentColumn.isPrimaryKey) {
+            } else if (refIsPK && !studentIsPK) {
               detailedChecks.push(`      ❌ Primary Key status for "${refColumn.columnName}" mismatch. Expected PK, got NOT PK. (-1 mark)`);
-            } else if (!refColumn.isPrimaryKey && studentColumn.isPrimaryKey) {
-              detailedChecks.push(`      ❌ Primary Key status for "${refColumn.columnName}" mismatch. Expected NOT PK, got PK. (-1 mark)`);
+            } else if (!refIsPK && studentIsPK) {
+              keysScore = Math.max(0, keysScore - 1);
+              detailedChecks.push(`      ❌ Primary Key status for "${refColumn.columnName}" mismatch. Expected NOT PK, got PK. (-1 mark penalty)`);
             } else {
               detailedChecks.push(`      ➖ Primary Key status for "${refColumn.columnName}" correctly not marked as PK.`);
             }
 
-            if (refColumn.isForeignKey && studentColumn.isForeignKey) {
+            if (refIsFK && studentIsFK) {
               keysScore += 1;
               detailedChecks.push(`      ✅ Foreign Key status for "${refColumn.columnName}" matches.`);
-            } else if (refColumn.isForeignKey && !studentColumn.isForeignKey) {
+            } else if (refIsFK && !studentIsFK) {
               detailedChecks.push(`      ❌ Foreign Key status for "${refColumn.columnName}" mismatch. Expected FK, got NOT FK. (-1 mark)`);
-            } else if (!refColumn.isForeignKey && studentColumn.isForeignKey) {
-              detailedChecks.push(`      ❌ Foreign Key status for "${refColumn.columnName}" mismatch. Expected NOT FK, got FK. (-1 mark)`);
+            } else if (!refIsFK && studentIsFK) {
+              keysScore = Math.max(0, keysScore - 1);
+              detailedChecks.push(`      ❌ Foreign Key status for "${refColumn.columnName}" mismatch. Expected NOT FK, got FK. (-1 mark penalty)`);
             } else {
               detailedChecks.push(`      ➖ Foreign Key status for "${refColumn.columnName}" correctly not marked as FK.`);
             }
@@ -231,10 +244,10 @@ const TeacherGrader = () => {
       }
     });
 
-    const totalRawScore = keysScore + fieldsScore + formatsScore + sizesScore + descsScore;
+    const totalRawScore = Math.max(0, keysScore + fieldsScore + formatsScore + sizesScore + descsScore);
     const maxPossibleRawScore = MAX_KEYS_POSSIBLE + MAX_FIELDS_POSSIBLE + MAX_FORMATS_POSSIBLE + (MAX_DESCS_POSSIBLE * 0.5) + MAX_SIZES_POSSIBLE;
     const conversionFactor = 15 / maxPossibleRawScore;
-    const finalMark = totalRawScore * conversionFactor;
+    const finalMark = Math.max(0, totalRawScore * conversionFactor);
 
     const summaryResults: string[] = [];
     summaryResults.push(`--- Detailed Scores ---`);
