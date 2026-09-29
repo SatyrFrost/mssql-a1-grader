@@ -19,8 +19,8 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
-        <Link to="/" className="text-lg font-bold tracking-tight">
-          SQL A1 Portal
+        <Link to="/" className="text-base sm:text-lg font-bold tracking-tight">
+          Data Modelling and SQL - Assignment 1
         </Link>
 
         {/* Desktop Navigation */}
