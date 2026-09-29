@@ -32,7 +32,7 @@ export function Navbar() {
     return cn(
       "inline-flex items-center px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all duration-150 border",
       isActive
-        ? "bg-slate-900 text-white border-slate-900 shadow-sm dark:bg-slate-100 dark:text-slate-900"
+        ? "bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white border-blue-600 shadow-sm shadow-blue-500/25"
         : "text-slate-600 border-slate-200/80 bg-slate-50/60 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300 dark:text-slate-300 dark:border-gray-700 dark:bg-gray-800/60 dark:hover:bg-gray-800"
     );
   };
