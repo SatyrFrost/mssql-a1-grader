@@ -17,6 +17,17 @@ interface DataDictionaryTableDisplayProps {
   dataDictionary: DataDictionary;
 }
 
+const MutedDash = () => (
+  <span className="inline-block w-4 h-1 bg-slate-300 dark:bg-slate-600 rounded-full select-none align-middle" />
+);
+
+const renderFlag = (val: boolean) => {
+  if (val) {
+    return <span className="inline-flex items-center text-emerald-600 font-bold">✅</span>;
+  }
+  return <MutedDash />;
+};
+
 export function DataDictionaryTableDisplay({ dataDictionary }: DataDictionaryTableDisplayProps) {
   if (!dataDictionary || !dataDictionary.tables || dataDictionary.tables.length === 0) {
     return (
@@ -43,12 +54,60 @@ export function DataDictionaryTableDisplay({ dataDictionary }: DataDictionaryTab
               <div className="overflow-x-auto">
                 <ShadcnTable>
                   <TableHeader>
-                    <TableRow><TableHead>Column Name</TableHead><TableHead>Data Type</TableHead><TableHead>Size</TableHead><TableHead>PK</TableHead><TableHead>FK</TableHead><TableHead>Optional</TableHead><TableHead>Auto</TableHead><TableHead>Values</TableHead><TableHead>Description</TableHead></TableRow>
+                    <TableRow>
+                      <TableHead>Column Name</TableHead>
+                      <TableHead>Data Type</TableHead>
+                      <TableHead className="text-center">Size</TableHead>
+                      <TableHead className="text-center">PK</TableHead>
+                      <TableHead className="text-center">FK</TableHead>
+                      <TableHead className="text-center">Optional</TableHead>
+                      <TableHead className="text-center">Auto</TableHead>
+                      <TableHead className="text-center">Values</TableHead>
+                      <TableHead>Description</TableHead>
+                    </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {table.columns.map((column: Column, columnIndex: number) => (
-                      <TableRow key={columnIndex}><TableCell className="font-medium">{column.columnName}</TableCell><TableCell>{column.dataType}</TableCell><TableCell>{column.size !== null ? column.size : "-"}</TableCell><TableCell>{column.isPrimaryKey ? "✅" : "❌"}</TableCell><TableCell>{column.isForeignKey ? "✅" : "❌"}</TableCell><TableCell>{column.isOptional === "Yes" ? "✅" : "❌"}</TableCell><TableCell>{column.isAuto ? "✅" : "❌"}</TableCell><TableCell>{column.defaultValue !== null ? column.defaultValue : "-"}</TableCell><TableCell className="max-w-[200px] truncate">{column.columnDescription}</TableCell></TableRow>
-                    ))}
+                    {table.columns.map((column: Column, columnIndex: number) => {
+                      const hasSize =
+                        column.size !== null &&
+                        column.size !== undefined &&
+                        column.size !== "" &&
+                        column.size !== "-";
+
+                      const hasDefaultValue =
+                        column.defaultValue !== null &&
+                        column.defaultValue !== undefined &&
+                        column.defaultValue !== "" &&
+                        column.defaultValue !== "-";
+
+                      return (
+                        <TableRow key={columnIndex}>
+                          <TableCell className="font-medium">{column.columnName}</TableCell>
+                          <TableCell>{column.dataType}</TableCell>
+                          <TableCell className="text-center">
+                            {hasSize ? column.size : <MutedDash />}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {renderFlag(column.isPrimaryKey)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {renderFlag(column.isForeignKey)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {renderFlag(column.isOptional === "Yes")}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {renderFlag(column.isAuto)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {hasDefaultValue ? column.defaultValue : <MutedDash />}
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate">
+                            {column.columnDescription || <MutedDash />}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </ShadcnTable>
               </div>
