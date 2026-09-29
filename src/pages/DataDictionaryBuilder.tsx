@@ -187,11 +187,17 @@ const DataDictionaryBuilder = () => {
             Load Model Answer
           </Button>
         )}
-        <Button variant="outline" onClick={handleLoadFromLocalStorage}>
+        <Button
+          onClick={handleLoadFromLocalStorage}
+          className="bg-sky-600 hover:bg-sky-700 text-white shadow-sm"
+        >
           <Upload className="h-4 w-4 mr-2" />
           Load Saved
         </Button>
-        <Button variant="outline" onClick={handleSaveExplicitly}>
+        <Button
+          onClick={handleSaveExplicitly}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+        >
           <Save className="h-4 w-4 mr-2" />
           Save
         </Button>
@@ -248,11 +254,17 @@ const DataDictionaryBuilder = () => {
             Load Model Answer
           </Button>
         )}
-        <Button variant="outline" onClick={handleLoadFromLocalStorage}>
+        <Button
+          onClick={handleLoadFromLocalStorage}
+          className="bg-sky-600 hover:bg-sky-700 text-white shadow-sm"
+        >
           <Upload className="h-4 w-4 mr-2" />
           Load Saved
         </Button>
-        <Button variant="outline" onClick={handleSaveExplicitly}>
+        <Button
+          onClick={handleSaveExplicitly}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+        >
           <Save className="h-4 w-4 mr-2" />
           Save
         </Button>
