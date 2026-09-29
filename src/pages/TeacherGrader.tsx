@@ -308,7 +308,9 @@ const TeacherGrader = () => {
                 <p
                   key={index}
                   className={`text-sm ${
-                    result.startsWith("✅")
+                    result.startsWith("Final Mark")
+                      ? "font-bold text-base text-foreground"
+                      : result.startsWith("✅")
                       ? "text-green-600"
                       : result.startsWith("❌")
                       ? "text-red-600"
