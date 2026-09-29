@@ -12,20 +12,27 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { X } from "lucide-react";
 
 interface DataDictionaryTableDisplayProps {
   dataDictionary: DataDictionary;
 }
 
 const MutedDash = () => (
-  <span className="inline-block w-4 h-1 bg-slate-300 dark:bg-slate-600 rounded-full select-none align-middle" />
+  <span className="font-bold text-slate-800 dark:text-slate-200 text-base select-none">—</span>
+);
+
+const MutedCross = () => (
+  <span className="inline-flex items-center justify-center text-slate-400 dark:text-slate-500">
+    <X className="h-4 w-4 stroke-[2.5]" />
+  </span>
 );
 
 const renderFlag = (val: boolean) => {
   if (val) {
     return <span className="inline-flex items-center text-emerald-600 font-bold">✅</span>;
   }
-  return <MutedDash />;
+  return <MutedCross />;
 };
 
 export function DataDictionaryTableDisplay({ dataDictionary }: DataDictionaryTableDisplayProps) {
@@ -80,6 +87,11 @@ export function DataDictionaryTableDisplay({ dataDictionary }: DataDictionaryTab
                         column.defaultValue !== "" &&
                         column.defaultValue !== "-";
 
+                      const hasDescription =
+                        column.columnDescription !== null &&
+                        column.columnDescription !== undefined &&
+                        column.columnDescription.trim() !== "";
+
                       return (
                         <TableRow key={columnIndex}>
                           <TableCell className="font-medium">{column.columnName}</TableCell>
@@ -103,7 +115,7 @@ export function DataDictionaryTableDisplay({ dataDictionary }: DataDictionaryTab
                             {hasDefaultValue ? column.defaultValue : <MutedDash />}
                           </TableCell>
                           <TableCell className="max-w-[200px] truncate">
-                            {column.columnDescription || <MutedDash />}
+                            {hasDescription ? column.columnDescription : <MutedDash />}
                           </TableCell>
                         </TableRow>
                       );
