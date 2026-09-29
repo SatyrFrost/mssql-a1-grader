@@ -63,7 +63,8 @@ const TeacherGrader = () => {
     setGradingResults([]);
 
     const detailedChecks: string[] = [];
-    let keysScore = 0;
+    let earnedKeys = 0;
+    let keyPenalties = 0;
     let fieldsScore = 0;
     let formatsScore = 0;
     let sizesScore = 0;
@@ -206,24 +207,24 @@ const TeacherGrader = () => {
             const refIsFK = Boolean(refColumn.isForeignKey);
 
             if (refIsPK && studentIsPK) {
-              keysScore += 1;
+              earnedKeys += 1;
               detailedChecks.push(`      ✅ Primary Key status for "${refColumn.columnName}" matches.`);
             } else if (refIsPK && !studentIsPK) {
               detailedChecks.push(`      ❌ Primary Key status for "${refColumn.columnName}" mismatch. Expected PK, got NOT PK. (-1 mark)`);
             } else if (!refIsPK && studentIsPK) {
-              keysScore = Math.max(0, keysScore - 1);
+              keyPenalties += 1;
               detailedChecks.push(`      ❌ Primary Key status for "${refColumn.columnName}" mismatch. Expected NOT PK, got PK. (-1 mark penalty)`);
             } else {
               detailedChecks.push(`      ➖ Primary Key status for "${refColumn.columnName}" correctly not marked as PK.`);
             }
 
             if (refIsFK && studentIsFK) {
-              keysScore += 1;
+              earnedKeys += 1;
               detailedChecks.push(`      ✅ Foreign Key status for "${refColumn.columnName}" matches.`);
             } else if (refIsFK && !studentIsFK) {
               detailedChecks.push(`      ❌ Foreign Key status for "${refColumn.columnName}" mismatch. Expected FK, got NOT FK. (-1 mark)`);
             } else if (!refIsFK && studentIsFK) {
-              keysScore = Math.max(0, keysScore - 1);
+              keyPenalties += 1;
               detailedChecks.push(`      ❌ Foreign Key status for "${refColumn.columnName}" mismatch. Expected NOT FK, got FK. (-1 mark penalty)`);
             } else {
               detailedChecks.push(`      ➖ Foreign Key status for "${refColumn.columnName}" correctly not marked as FK.`);
@@ -244,6 +245,7 @@ const TeacherGrader = () => {
       }
     });
 
+    const keysScore = Math.max(0, earnedKeys - keyPenalties);
     const totalRawScore = Math.max(0, keysScore + fieldsScore + formatsScore + sizesScore + descsScore);
     const maxPossibleRawScore = MAX_KEYS_POSSIBLE + MAX_FIELDS_POSSIBLE + MAX_FORMATS_POSSIBLE + (MAX_DESCS_POSSIBLE * 0.5) + MAX_SIZES_POSSIBLE;
     const conversionFactor = 15 / maxPossibleRawScore;
